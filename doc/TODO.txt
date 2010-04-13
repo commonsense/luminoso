@@ -1,0 +1,27 @@
+Current bugs and future plans
+=============================
+
+Simple things to fix
+--------------------
+- If you choose an axis, rotate slightly so that the axis remains selected, and
+  choose the same axis again, nothing happens. (It should put the axis back
+  where it was before the rotation.)
+- Support encoding detection with the 'chardet' module throughout, not just in
+  Study.analyze().
+
+Harder things to fix
+--------------------
+- Make it multilingual -- don't assume English.
+- Study loading is inexplicably slow (loading the pickles individually doesn't
+  take that long).
+- Unexpected data leads to less-than-helpful error messages.
+
+Long-term features
+------------------
+
+- Ability to turn on and off the display of different blend matrices [hard]
+- Ability to load a single matrix without wrapping it in a study?
+- Ability to use CCIPCA, include streaming data in a study
+- Toggle between projecting the SVD like we do now, and MDSing it
+- Clusters (giving them descriptions)
+
