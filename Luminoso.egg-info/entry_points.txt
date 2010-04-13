@@ -1,0 +1,3 @@
+[console_scripts]
+luminoso = luminoso.run_luminoso:main
+

@@ -1,0 +1,6 @@
+divisi>=0.6.10
+simplejson
+ipython==0.9.1
+chardet
+jinja2
+

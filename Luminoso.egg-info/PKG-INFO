@@ -1,0 +1,24 @@
+Metadata-Version: 1.0
+Name: Luminoso
+Version: 1.0.2
+Summary: A Python GUI for semantic analysis using Divisi
+Home-page: http://launchpad.net/luminoso/
+Author: MIT Media Lab, Software Agents group
+Author-email: conceptnet@media.mit.edu
+License: http://www.gnu.org/copyleft/gpl.html
+Description: UNKNOWN
+Platform: any
+Classifier: Intended Audience :: Developers
+Classifier: Intended Audience :: Science/Research
+Classifier: License :: OSI Approved :: GNU General Public License (GPL)
+Classifier: Natural Language :: English
+Classifier: Operating System :: MacOS
+Classifier: Operating System :: Microsoft :: Windows
+Classifier: Operating System :: POSIX
+Classifier: Operating System :: Unix
+Classifier: Programming Language :: C
+Classifier: Programming Language :: Python :: 2.5
+Classifier: Programming Language :: Python :: 2.6
+Classifier: Topic :: Scientific/Engineering
+Classifier: Topic :: Software Development
+Classifier: Topic :: Text Processing :: Linguistic

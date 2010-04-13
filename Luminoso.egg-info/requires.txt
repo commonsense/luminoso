@@ -1,0 +1,5 @@
+csc-utils >= 0.4.2
+divisi >= 0.6.8
+ipython >= 0.9.1
+jinja2
+chardet
