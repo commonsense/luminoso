@@ -1,0 +1,36 @@
+So you want to install Luminoso from source? Here's the dependencies you'll
+need, with hints on where to find them. It's like a scavenger hunt (except less
+fun)!
+
+Python 2.6
+    From your OS or from http://python.org.
+
+The `gcc` C compiler
+    We suggest getting it from the `build-essential` package on Ubuntu, Xcode
+    on Mac, and MinGW on Windows.
+
+`pip` or `easy_install`
+    These are Python package managers. `pip` is the newer one, but Macs come
+    with `easy_install`. You can `sudo easy_install pip`, install the
+    `python-pip` Ubuntu package, or download a script that installs it.
+
+The Qt4 libraries
+    Get them from http://qt.nokia.com/.
+
+SIP
+    A C++ interface that PyQt4 depends on.
+    http://www.riverbankcomputing.co.uk/software/sip/download
+
+PyQt4
+    This is separate code from Qt4, and you need both:
+    http://www.riverbankcomputing.co.uk/software/pyqt/download
+
+NumPy
+    An extremely useful library for numerical computing with Python.
+    http://numpy.scipy.org
+
+Once you've got all those:
+
+    sudo pip install -r requirements.txt
+    sudo python setup.py develop
+
