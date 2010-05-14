@@ -4,7 +4,6 @@ from PyQt4.QtCore import Qt, QRectF as Rect, QPointF as Point, QLineF as Line, Q
 from PyQt4.QtGui import QApplication, QColor, QWidget, QImage, QPainter, QPen, QFont, QFontMetrics, QVBoxLayout, QComboBox, QLabel, QPushButton, QGridLayout, QCompleter
 import numpy as np
 from csc.util.persist import get_picklecached_thing
-from csc.divisi.tensor import data
 from collections import defaultdict
 
 # This initializes Qt, and nothing works without it. Even though we
@@ -343,6 +342,9 @@ class LabelLayer(Layer):
         labeled_so_far = 0
         self.label_mask[:] = False
         label_indices = [self.luminoso.selected_index] + [self.order[i] for i in self.whichlabels]
+        print repr(self.luminoso.selected_index)
+        print repr(self.order)
+        print repr(whichlabels)
         for (i, lindex) in enumerate(label_indices):
             if lindex is None: continue
             x, y = self.luminoso.screenpts[lindex]
@@ -498,21 +500,19 @@ class LinkLayer(Layer):
         self.matrix = matrix
         
         self.source = None
-        # poke the matrix to make sure it's loaded
-        self.matrix[self.matrix.labels((0, 0))]
         self.connections = []
 
     def selectEvent(self, selected_index):
         selectkey = self.luminoso.labels[selected_index]
         connections = []
-        if selectkey in self.matrix.label_list(0):
+        if selectkey in self.matrix.row_labels:
             for (other,) in self.matrix[selectkey,:]:
                 try:
                     index = self.luminoso.labels.index(other)
                     connections.append(index)
                 except KeyError:
                     pass
-        if selectkey in self.matrix.label_list(1):
+        if selectkey in self.matrix.col_labels:
             for (other,) in self.matrix[:,selectkey].keys():
                 try:
                     index = self.luminoso.labels.index(other)
@@ -633,18 +633,18 @@ class SVDViewer(QWidget):
         self.update()
 
     @staticmethod
-    def make_svdview(tensor, svdtensor, canonical=None):
-        widget = SVDViewer(data(svdtensor), svdtensor.label_list(0))
+    def make_svdview(matrix, svdmatrix, canonical=None):
+        widget = SVDViewer(svdmatrix, svdmatrix.row_labels)
         widget.setup_standard_layers()
         widget.set_default_axes()
         if canonical is None: canonical = []
         widget.insert_layer(1, CanonicalLayer, canonical)
-        widget.insert_layer(2, LinkLayer, tensor.bake())
+        widget.insert_layer(2, LinkLayer, matrix)
         return widget
 
     @staticmethod
-    def make_colors(tensor, svdtensor):
-        widget = SVDViewer(data(svdtensor), svdtensor.label_list(0))
+    def make_colors(matrix, svdmatrix):
+        widget = SVDViewer(svdmatrix, svdmatrix.col_labels)
         widget.setup_standard_layers()
         
         from csc.concepttools.colors import text_color
@@ -863,8 +863,12 @@ class SVDViewer(QWidget):
         self.update()
 
 def get_conceptnet():
-    from csc.conceptnet4.analogyspace import conceptnet_2d_from_db
-    return conceptnet_2d_from_db('en').normalized()
+    from csc.divisi2.network import analogyspace_matrix
+    return analogyspace_matrix('en').normalize_all()
+
+def get_analogyspace(cnet):
+    U, S, V = cnet.svd(k=100)
+    return U
 
 def main(app):
     if len(sys.argv) > 1:
@@ -872,7 +876,7 @@ def main(app):
     else:
         picklefile = 'aspace.pickle'
     cnet = get_picklecached_thing('cnet.pickle', get_conceptnet)
-    matrix = get_picklecached_thing(picklefile)
+    matrix = get_picklecached_thing(picklefile, lambda: get_analogyspace(cnet))
     view = SVDViewer.make_svdview(cnet, matrix)
     view.setGeometry(300, 300, 800, 600)
     view.setWindowTitle("SVDview")
