@@ -57,8 +57,8 @@ class StompThread(QThread):
             self.on_message(msg.body)
 
 def main(app):
-    #thread = StompThread('localhost', 61613, '/topic/SocNOC/redfishbluefish', 10000, 9)
-    thread = StompThread('localhost', 61613, '/topic/SocNOC/lmds', 10000, 9)
+    thread = StompThread('localhost', 61613, '/topic/SocNOC/redfishbluefish', 10000, 9)
+    #thread = StompThread('localhost', 61613, '/topic/SocNOC/lmds', 10000, 9)
     signal = SIGNAL("newData()")
     view = SVDViewer.make(thread.array, thread.labels)
     view.connect(thread, signal, view.refreshData)
