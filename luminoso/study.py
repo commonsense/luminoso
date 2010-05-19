@@ -29,6 +29,26 @@ try:
 except ImportError:
     import simplejson as json
 
+class Document(object):
+    '''
+    A Document is an entity in a Study.
+    '''
+    def __init__(self, name, text):
+        self.name = name
+        self.text = text
+
+    @classmethod
+    def from_file(cls, filename, name):
+        # Open in text mode.
+        rawtext = open(filename, 'r')
+        encoding = chardet.detect(rawtext.read())['encoding']
+        rawtext.close()
+        text = codecs.open(filename, encoding=encoding, errors='replace').read()
+        return cls(name, text)
+
+    def extract_concepts_with_negation(self):
+        return extract_concepts_with_negation(self.text)
+
 NEGATION = ['no', 'not', 'never', 'stop', 'lack', "n't"]
 PUNCTUATION = ['.', ',', '!', '?', '...', '-']
 def extract_concepts_with_negation(text):
@@ -188,16 +208,11 @@ class LuminosoStudy(QtCore.QObject):
         if self.get_documents_files():
             documents_matrix = make_sparse_labeled_tensor(ndim=2)
             for filename in self.get_documents_files():
-                # because we're dealing with plain text, we have to auto
-                rawtext = open(filename)
-                encoding = chardet.detect(rawtext.read())['encoding']
-                rawtext.close()
-                text = codecs.open(filename, encoding=encoding, errors='replace').read()
                 short_filename = os.path.basename(filename)
-                extracted = extract_concepts_with_negation(text)
-                for concept, value in extracted:
+                doc = Document.from_file(filename, short_filename)
+                for concept, value in doc.extract_concepts_with_negation():
                     if not en_nl.is_blacklisted(concept):
-                        documents_matrix[concept, short_filename] += value
+                        documents_matrix[concept, doc.name] += value
 
             matrix_norm = documents_matrix.normalized(mode=[0,1]).bake()
             return matrix_norm
@@ -380,11 +395,14 @@ def test():
     study.analyze()
 
 if __name__ == '__main__':
-    import cProfile as profile
-    import pstats
-    profile.run('test()', 'study.profile')
-    test()
+    DO_PROFILE=False
+    if DO_PROFILE:
+        import cProfile as profile
+        import pstats
+        profile.run('test()', 'study.profile')
+        p = pstats.Stats('study.profile')
+        p.sort_stats('time').print_stats(50)
+    else:
+        test()
 
-    p = pstats.Stats('study.profile')
-    p.sort_stats('time').print_stats(50)
 
