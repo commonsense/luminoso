@@ -12,7 +12,7 @@ def render_info_page(study):
         return render_info_nodocs(study)
     else:
         study_name = study.get_name()
-        num_documents = len(study.get_documents_files())
+        num_documents = study.num_documents
         
         # FIXME: better way to tell concepts apart from documents
         concepts = [c for c in study.study_concepts if not is_a_document(c)]
