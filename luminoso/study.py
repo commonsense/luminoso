@@ -8,7 +8,7 @@ import cPickle as pickle
 import numpy as np
 import traceback
 import logging
-import zipfile
+import hashlib
 import chardet
 logger = logging.getLogger('luminoso')
 
@@ -28,6 +28,9 @@ try:
     import json
 except ImportError:
     import simplejson as json
+
+class OutdatedAnalysisError(Exception):
+    pass
 
 class Document(object):
     '''
@@ -99,6 +102,13 @@ class Study(QtCore.QObject):
         logger.info(msg)
         self.emit(QtCore.SIGNAL('step(QString)'), msg)
 
+    def get_contents_hash(self):
+        def sha1(txt): return hashlib.sha1(txt).hexdigest()
+        docs = dict((doc.name, (isinstance(doc, CanonicalDocument), sha1(doc.text))) for doc in self.documents)
+        matrices = dict((name, hash(mat)) for name, mat in self.other_matrices.items())
+        # TODO: make sure matrices have a meaningful `hash`.
+        return dict(docs=docs, matrices=matrices)
+
     @property
     def num_documents(self):
         return len(self.documents)
@@ -114,7 +124,7 @@ class Study(QtCore.QObject):
 
     def get_blend(self):
         doc_matrix = self.get_documents_matrix()
-        other_matrices = self.other_matrices
+        other_matrices = self.other_matrices.values()
 
         if doc_matrix is not None:
             blend = Blend([doc_matrix] + other_matrices)
@@ -203,8 +213,9 @@ class Study(QtCore.QObject):
 
 
 class StudyResults(QtCore.QObject):
-    def __init__(self, blend, svd, projections, stats):
+    def __init__(self, study, blend, svd, projections, stats):
         QtCore.QObject.__init__(self)
+        self.study = study
         self.blend = blend
         self.svd = svd
         self.projections = projections
@@ -263,14 +274,22 @@ class StudyResults(QtCore.QObject):
         self.write_coords_as_csv(tgt("coords.csv"))
         self.write_report(tgt("report.html"))
 
+        # Save input contents hash to know if the study has changed.
+        save_pickle('input_hash.pickle', self.study.get_contents_hash())
+
     @classmethod
-    def load(cls, dir):
+    def load(cls, dir, for_study):
         def tgt(name): return os.path.join(dir, name)
         def load_pickle(name):
             with open(tgt(name), 'rb') as f:
                 return pickle.load(f)
 
         # Either this will all fail or all succeed.
+        input_hash = load_pickle('input_hash.pickle')
+        cur_hash = for_study.get_contents_hash()
+        if input_hash != cur_hash:
+            raise OutdatedAnalysisError()
+        
         #self._step("Loading blend")
         blend = load_pickle("blend.pickle")
 
@@ -287,7 +306,7 @@ class StudyResults(QtCore.QObject):
         # Load stats
         stats = load_json_from_file(tgt("stats.json"))
 
-        return cls(blend, svd, projections, stats)
+        return cls(for_study, blend, svd, projections, stats)
 
 class StudyDirectory(QtCore.QObject):
     '''
@@ -373,8 +392,8 @@ class StudyDirectory(QtCore.QObject):
         
 
     def get_matrices(self):
-        return [get_picklecached_thing(filename).normalized(mode=[0,1]).bake()
-                for filename in self.get_matrices_files()]
+        return dict((os.path.basename(filename), get_picklecached_thing(filename).normalized(mode=[0,1]).bake())
+                    for filename in self.get_matrices_files())
     
 
     def get_study(self):
