@@ -204,7 +204,7 @@ class MainWindow(QtGui.QMainWindow):
         platforms = {"darwin" : "open " , 
                      "win32" : "explorer ", 
                      "cygwin" : "explorer ",
-                     "linux2" : "nautilus "}
+                     "linux2" : "xdg-open "}
 
         system = sys.platform
 
