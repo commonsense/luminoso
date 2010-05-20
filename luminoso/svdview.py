@@ -5,6 +5,7 @@ from PyQt4.QtGui import QApplication, QColor, QWidget, QImage, QPainter, QPen, Q
 import numpy as np
 from csc.util.persist import get_picklecached_thing
 from collections import defaultdict
+from csc import divisi2
 
 # This initializes Qt, and nothing works without it. Even though we
 # don't use the "app" variable until the end.
@@ -60,13 +61,13 @@ class Projection(QObject):
 
     def components_to_projection(self, vec):
         try:
-            return np.dot(vec, self.matrix[:, :vec.shape[-1]])
+            return divisi2.dot(vec, self.matrix[:, :vec.shape[-1]])
         except ValueError:
             raise ValueError("Couldn't calculate dot product of %r (shape=%r, k=%d)" % (vec, vec.shape, self.k))
     
     def components_to_target(self, vec):
         try:
-            return np.dot(vec, self.target_matrix[:, :vec.shape[-1]])
+            return divisi2.dot(vec, self.target_matrix[:, :vec.shape[-1]])
         except ValueError:
             raise ValueError("Couldn't calculate dot product of %r (shape=%r, k=%d)" % (vec, vec.shape, self.k))
     
@@ -82,7 +83,7 @@ class Projection(QObject):
         """
         prev = self.target_matrix.copy()
         self.target_matrix[:,0] /= np.linalg.norm(self.target_matrix[:,0])
-        self.target_matrix[:,1] -= self.target_matrix[:,0] * np.dot(self.target_matrix[:,0], self.matrix[:,1])
+        self.target_matrix[:,1] -= self.target_matrix[:,0] * divisi2.dot(self.target_matrix[:,0], self.matrix[:,1])
         self.target_matrix[:,1] /= np.linalg.norm(self.target_matrix[:,1])
         self.target_matrix[:,:] = self.target_matrix*(power) + prev*(1-power)
         if np.any(np.isnan(self.target_matrix)):
@@ -92,7 +93,7 @@ class Projection(QObject):
 
     def move_towards(self, vec, target):
         orig = self.components_to_target(vec)
-        delta = (target - orig) / np.dot(vec, vec)
+        delta = (target - orig) / divisi2.dot(vec, vec)
         self.target_matrix += delta[np.newaxis,:] * vec[:,np.newaxis]
         magnitude = np.sum(delta**2)
         power = np.tanh(magnitude)/10
@@ -116,7 +117,7 @@ class Projection(QObject):
     def component(self, vec, reference):
         "Return the component of a vector in the direction of another vector."
         reference_norm = reference / np.linalg.norm(reference)
-        return reference_norm * np.dot(vec, reference_norm)
+        return reference_norm * divisi2.dot(vec, reference_norm)
 
     def next_axis(self):
         self.target_matrix = np.concatenate(
@@ -342,9 +343,6 @@ class LabelLayer(Layer):
         labeled_so_far = 0
         self.label_mask[:] = False
         label_indices = [self.luminoso.selected_index] + [self.order[i] for i in self.whichlabels]
-        print repr(self.luminoso.selected_index)
-        print repr(self.order)
-        print repr(whichlabels)
         for (i, lindex) in enumerate(label_indices):
             if lindex is None: continue
             x, y = self.luminoso.screenpts[lindex]
@@ -386,7 +384,7 @@ class LabelLayer(Layer):
         self.label_mask = np.zeros((self.luminoso.width, self.luminoso.height), dtype=np.bool8)
         
     def update_order(self):
-        self.distances = self.luminoso.distances_from_mouse(self.luminoso.array)
+        self.distances = np.asarray(self.luminoso.distances_from_mouse(np.asarray(self.luminoso.array)))
         self.order = np.argsort(self.distances)
 
 class SelectionLayer(Layer):
@@ -416,7 +414,7 @@ class SelectionLayer(Layer):
 class SimilarityLayer(Layer):
     def selectEvent(self, index):
         vec = self.luminoso.array[index]
-        sim = np.dot(self.luminoso.array, vec) / np.linalg.norm(vec) / np.sqrt(np.sum(self.luminoso.array ** 2, axis=1))
+        sim = divisi2.dot(self.luminoso.array, vec) / np.linalg.norm(vec) / np.sqrt(np.sum(self.luminoso.array ** 2, axis=1))
         sim_indices = np.clip(np.int32(sim*600 + 300), 0, 599)
         self.luminoso.colors = simcolors[sim_indices]
 
@@ -506,14 +504,14 @@ class LinkLayer(Layer):
         selectkey = self.luminoso.labels[selected_index]
         connections = []
         if selectkey in self.matrix.row_labels:
-            for (other,) in self.matrix[selectkey,:]:
+            for (value, other) in self.matrix.row_named(selectkey).named_entries():
                 try:
                     index = self.luminoso.labels.index(other)
                     connections.append(index)
                 except KeyError:
                     pass
         if selectkey in self.matrix.col_labels:
-            for (other,) in self.matrix[:,selectkey].keys():
+            for (value, other) in self.matrix.col_named(selectkey).named_entries():
                 try:
                     index = self.luminoso.labels.index(other)
                     connections.append(index)
@@ -544,7 +542,7 @@ class SVDViewer(QWidget):
         self.height = self.size().height()
 
         self.labels = labels
-        self.array = array
+        self.array = np.asarray(array)
         self.orig_array = self.array.copy()
 
         self.npoints = self.array.shape[0]
@@ -863,21 +861,19 @@ class SVDViewer(QWidget):
         self.update()
 
 def get_conceptnet():
-    from csc.divisi2.network import analogyspace_matrix
-    return analogyspace_matrix('en').normalize_all()
+    from csc.divisi2.network import conceptnet_matrix
+    return conceptnet_matrix('en').normalize_all()
 
 def get_analogyspace(cnet):
     U, S, V = cnet.svd(k=100)
     return U
 
 def main(app):
-    if len(sys.argv) > 1:
-        picklefile = sys.argv[1]
-    else:
-        picklefile = 'aspace.pickle'
-    cnet = get_picklecached_thing('cnet.pickle', get_conceptnet)
-    matrix = get_picklecached_thing(picklefile, lambda: get_analogyspace(cnet))
-    view = SVDViewer.make_svdview(cnet, matrix)
+    cnet = get_conceptnet()
+    U, S, V = cnet.svd(k=100)
+    aspace = U.extend(V)[:,:20]
+    print "loaded data"
+    view = SVDViewer.make_svdview(cnet, aspace)
     view.setGeometry(300, 300, 800, 600)
     view.setWindowTitle("SVDview")
     view.show()
