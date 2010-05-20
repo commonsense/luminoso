@@ -29,6 +29,30 @@ try:
 except ImportError:
     import simplejson as json
 
+class Document(object):
+    '''
+    A Document is an entity in a Study.
+    '''
+    def __init__(self, name, text):
+        self.name = name
+        self.text = text
+
+    @classmethod
+    def from_file(cls, filename, name):
+        # Open in text mode.
+        rawtext = open(filename, 'r')
+        encoding = chardet.detect(rawtext.read())['encoding']
+        rawtext.close()
+        text = codecs.open(filename, encoding=encoding, errors='replace').read()
+        return cls(name, text)
+
+    def extract_concepts_with_negation(self):
+        return extract_concepts_with_negation(self.text)
+
+class CanonicalDocument(Document):
+    pass
+
+
 NEGATION = ['no', 'not', 'never', 'stop', 'lack', "n't"]
 PUNCTUATION = ['.', ',', '!', '?', '...', '-']
 def extract_concepts_with_negation(text):
@@ -69,7 +93,7 @@ class LuminosoStudy(QtCore.QObject):
         self.study_concepts = None
         self.info = None
         self.stats = None
-        self.update_canonical()
+        self.update_documents()
         #self.load_pickle_cache()
 
     @staticmethod
@@ -175,34 +199,31 @@ class LuminosoStudy(QtCore.QObject):
         else:
             return files
 
-    def update_canonical(self): 
-        self.canonical_docs = self.listdir('Canonical', text_only=True, full_names=False)
-
-    def get_documents_files(self):
-        return self.listdir('Documents', text_only=True, full_names=True) + self.listdir('Canonical', text_only=True, full_names=True)
-
     def get_matrices_files(self):
         return self.listdir('Matrices', text_only=False, full_names=True)
+
+    def update_documents(self):
+        self.study_documents = [Document.from_file(filename, name=os.path.basename(filename))
+                           for filename in self.listdir('Documents', text_only=True, full_names=True)]
+        self.canonical_documents = [CanonicalDocument.from_file(filename, name=os.path.basename(filename))
+                               for filename in self.listdir('Canonical', text_only=True, full_names=True)]
+        self.documents = self.study_documents + self.canonical_documents
+        self.canonical_docs = [doc.name for doc in self.canonical_documents]
+        
+
+    @property
+    def num_documents(self):
+        return len(self.documents)
     
     def get_documents_matrix(self):
-        if self.get_documents_files():
-            documents_matrix = make_sparse_labeled_tensor(ndim=2)
-            for filename in self.get_documents_files():
-                # because we're dealing with plain text, we have to auto
-                rawtext = open(filename)
-                encoding = chardet.detect(rawtext.read())['encoding']
-                rawtext.close()
-                text = codecs.open(filename, encoding=encoding, errors='replace').read()
-                short_filename = os.path.basename(filename)
-                extracted = extract_concepts_with_negation(text)
-                for concept, value in extracted:
-                    if not en_nl.is_blacklisted(concept):
-                        documents_matrix[concept, short_filename] += value
-
-            matrix_norm = documents_matrix.normalized(mode=[0,1]).bake()
-            return matrix_norm
-        else:
-            return None
+        if not self.documents: return None
+        documents_matrix = make_sparse_labeled_tensor(ndim=2)
+        for doc in self.documents:
+            for concept, value in doc.extract_concepts_with_negation():
+                if not en_nl.is_blacklisted(concept):
+                    documents_matrix[concept, doc.name] += value
+                    
+        return documents_matrix.normalized(mode=[0,1]).bake()
 
     def load_matrices(self):
         matrices = []
@@ -380,11 +401,14 @@ def test():
     study.analyze()
 
 if __name__ == '__main__':
-    import cProfile as profile
-    import pstats
-    profile.run('test()', 'study.profile')
-    test()
+    DO_PROFILE=False
+    if DO_PROFILE:
+        import cProfile as profile
+        import pstats
+        profile.run('test()', 'study.profile')
+        p = pstats.Stats('study.profile')
+        p.sort_stats('time').print_stats(50)
+    else:
+        test()
 
-    p = pstats.Stats('study.profile')
-    p.sort_stats('time').print_stats(50)
 
