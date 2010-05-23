@@ -13,11 +13,9 @@ import chardet
 logger = logging.getLogger('luminoso')
 
 from standalone_nlp.lang_en import nltools as en_nl
-from csc.util.persist import get_picklecached_thing
-from csc.divisi.labeled_view import make_sparse_labeled_tensor, LabeledView
-from csc.divisi.ordered_set import OrderedSet
-from csc.divisi.tensor import DenseTensor, data
-from csc.divisi.blend import Blend
+from csc import divisi2
+from csc.divisi2.blending import blend
+from csc.divisi2.ordered_set import OrderedSet
 
 from luminoso.whereami import package_dir
 from luminoso.report import render_info_page, default_info_page
@@ -52,15 +50,31 @@ class Document(object):
     def extract_concepts_with_negation(self):
         return extract_concepts_with_negation(self.text)
 
+    def get_sentences(self):
+        words = en_nl.tokenize(self.text).split()
+        sentences = []
+        current_sentence = []
+        for word in words:
+            if word in PUNCTUATION:
+                if len(current_sentence) > 2:
+                    sentences.append(current_sentence)
+                    current_sentence = []
+            else:
+                current_sentence.append(word)
+        sentences.append(' '.join(current_sentence))
+        return sentences
+
 class CanonicalDocument(Document):
     pass
 
 
 NEGATION = ['no', 'not', 'never', 'stop', 'lack', "n't"]
-PUNCTUATION = ['.', ',', '!', '?', '...', '-']
+PUNCTUATION = ['.', ',', '!', '?', '...', '-', ':', ';']
 def extract_concepts_with_negation(text):
-    words = en_nl.normalize(en_nl.tokenize(text)).split()
-    
+    words = en_nl.tokenize(text).split()
+    return extract_concepts_from_words(words)
+
+def extract_concepts_from_words(words):
     # FIXME: this may join together words from different contexts...
     positive_words = []
     negative_words = []
@@ -95,6 +109,7 @@ class Study(QtCore.QObject):
         QtCore.QObject.__init__(self)
         self.name = name
         self.documents = documents
+        self._documents_matrix = None
         self.other_matrices = other_matrices
         self.num_axes = 20
         
@@ -114,54 +129,92 @@ class Study(QtCore.QObject):
         return len(self.documents)
     
     def get_documents_matrix(self):
-        if not self.documents: return None
-        documents_matrix = make_sparse_labeled_tensor(ndim=2)
+        """
+        Get a matrix of documents vs. concepts.
+
+        This is temporarily cached (besides what StudyDir does) because it
+        will be needed multiple times in analyzing a study.
+        """
+        self._step('Building document matrix...')
+        if self.num_documents == 0: return None
+        if self._documents_matrix is not None:
+            return self._documents_matrix
+        entries = []
         for doc in self.documents:
             for concept, value in doc.extract_concepts_with_negation():
                 if not en_nl.is_blacklisted(concept):
-                    documents_matrix[concept, doc.name] += value
-        return documents_matrix.normalized(mode=[0,1]).bake()
+                    entries.append((value, doc.name, concept))
+        self._documents_matrix = divisi2.make_sparse(entries)
+        return self._documents_matrix
+    
+    def get_documents_assoc(self):
+        self._step('Finding associated concepts...')
+        if self.num_documents == 0: return None
+        entries = []
+        for doc in self.documents:
+            if isinstance(doc, CanonicalDocument):
+                # canonical docs must not affect the analysis
+                continue
 
-    def get_blend(self):
-        doc_matrix = self.get_documents_matrix()
-        other_matrices = self.other_matrices.values()
+            for sentence in doc.get_sentences():
+                # avoid insane space usage by limiting to 100 words
+                concepts = extract_concepts_from_words(sentence[:100])
+                for concept1, value1 in concepts:
+                    for concept2, value2 in concepts:
+                        entries.append( (value1*value2, concept1, concept2) )
+                        entries.append( (value1*value2, concept2, concept1) )
+        return divisi2.SparseMatrix.square_from_named_entries(entries)
 
-        if doc_matrix is not None:
-            blend = Blend([doc_matrix] + other_matrices)
-            study_concepts = set(doc_matrix.label_list(0)) | set(doc_matrix.label_list(1))
+    def get_assoc_blend(self):
+        self._step('Blending...')
+        other_matrices = []
+        doc_matrix = self.get_documents_assoc()
+        for name, matrix in self.other_matrices.items():
+            # use association matrices only
+            # (unless we figure out how to do both kinds of blending)
+            if name.endswith('.assoc.smat'):
+                if matrix.shape[0] != matrix.shape[1]:
+                    raise ValueError("The matrix %s is not square" % name)
+                other_matrices.append(matrix)
+
+        if doc_matrix is None:
+            theblend = blend(other_matrices)
+            study_concepts = set(theblend.row_labels)
         else:
-            if len(other_matrices) == 1:
-                blend = other_matrices[0]
-            else:
-                blend = Blend(other_matrices)
-            study_concepts = set(blend.label_list(0))
+            theblend = blend([doc_matrix] + other_matrices)
+            study_concepts = set(doc_matrix.row_labels)
+        return theblend, study_concepts
 
-        return blend, study_concepts
+    def get_eigenstuff(self):
+        self._step('Finding eigenvectors...')
+        document_matrix = self.get_documents_matrix()
+        theblend, study_concepts = self.get_assoc_blend()
+        U, Sigma, V = theblend.normalize_all().svd(k=self.num_axes)
+        indices = [U.row_index(concept) for concept in study_concepts]
+        reduced_U = U[indices]
+        doc_rows = divisi2.aligned_matrix_multiply(document_matrix, reduced_U)
+        projections = reduced_U.extend(doc_rows)
+        return document_matrix, projections, Sigma
 
-    def get_projections(self, svd, study_concepts):
-        # Put concepts and features together.
-        # FIXME: maybe make this a real blend?
-        concatenated = svd.get_weighted_u().concatenate(svd.v)
-        # Extract just the study concepts. (FIXME: really this complicated?)
-        new_concepts = OrderedSet(study_concepts)
-        new_data = np.zeros((len(new_concepts), svd.u.shape[1]))
-        new_matrix = LabeledView(DenseTensor(new_data), [new_concepts, None])
-        for index in xrange(len(new_concepts)):
-            new_data[index, :] = data(concatenated[new_concepts[index], :])
-        
-        # Find the principal components of that matrix.
-        # maybe FIXME: don't shove them into the matrix?
-        newsvd = new_matrix.svd(k=2)
-        axis_labels = OrderedSet(['DefaultXAxis', 'DefaultYAxis'])
-        extra_axis_data = data(newsvd.v.T)[0:2, :] / 1000
-        extra_axis_matrix = LabeledView(DenseTensor(extra_axis_data), [axis_labels, None])
-        return new_matrix.concatenate(extra_axis_matrix)
-
-    def compute_stats(self, projections, svd, study_concepts):
+    def compute_stats(self, docs, projections, spectral):
         """
+        DOUBLE FIXME: this isn't divisi2 ready
+
         FIXME: On large datasets, calculating every pairwise similarity might
         be too expensive. Cut down the size of the working matrix somehow?
         """
+        return None
+
+        standard_docs_projections = divisi2.aligned_matrix_multiply(docs,
+        projections)
+
+        # left off here
+
+        for doc in self.get_documents():
+            if isinstance(doc, CanonicalDocument): continue
+            for doc2 in self.get_documents():
+                pass
+        
         projdata = data(projections)
         svals = data(svd.svals)
         
@@ -198,31 +251,28 @@ class Study(QtCore.QObject):
 
     def analyze(self):
         # TODO: make it possible to blend multiple directories
-
-        self._step('Blending...')
-        blend, study_concepts = self.get_blend()
-        svd = blend.svd(k=self.num_axes)
-         
-        self._step('Finding interesting axes...')
-        projections = self.get_projections(svd, study_concepts)
-
+        self._documents_matrix = None
+        docs, projections, Sigma = self.get_eigenstuff()
+        spectral = divisi2.reconstruct_activation(projections, Sigma)
         self._step('Calculating stats...')
-        stats = self.compute_stats(projections, svd, study_concepts)
+        stats = self.compute_stats(docs, projections, spectral)
         
-        return StudyResults(blend, svd, projections, stats)
+        return StudyResults(self, docs, projections, spectral, stats)
 
 
 class StudyResults(QtCore.QObject):
-    def __init__(self, study, blend, svd, projections, stats):
+    def __init__(self, study, docs, projections, spectral, stats):
         QtCore.QObject.__init__(self)
         self.study = study
-        self.blend = blend
-        self.svd = svd
+        self.docs = docs
+        self.spectral = spectral
         self.projections = projections
         self.stats = stats
 
-
     def write_coords_as_csv(self, filename):
+        # FIXME: not divisi2 ready
+        raise NotImplementedError
+
         import csv
         x_axis = self.projections['DefaultXAxis',:].hat()
         y_axis = self.projections['DefaultYAxis',:].hat()
@@ -259,19 +309,18 @@ class StudyResults(QtCore.QObject):
             with open(tgt(name), 'wb') as out:
                 pickle.dump(obj, out, -1)
 
-        self._step('Saving blend...')
-        save_pickle("blend.pickle", self.blend)
+        #self._step('Saving blend...')
+        save_pickle("documents.smat", self.docs)
 
-        self._step('Saving SVD...')
-        save_pickle("svd.pickle", self.svd)
+        #self._step('Saving eigenvectors...')
+        save_pickle("spectral.rmat", self.spectral)
         
-        self._step('Saving projections...')
-        save_pickle('projections.pickle', self.projections)
+        #self._step('Saving projections...')
+        save_pickle('projections.dmat', self.projections)
 
-        self._step('Writing reports...')
+        #self._step('Writing reports...')
         # Save stats
         write_json_to_file(self.stats, tgt("stats.json"))
-        self.write_coords_as_csv(tgt("coords.csv"))
         self.write_report(tgt("report.html"))
 
         # Save input contents hash to know if the study has changed.
@@ -290,23 +339,14 @@ class StudyResults(QtCore.QObject):
         if input_hash != cur_hash:
             raise OutdatedAnalysisError()
         
-        #self._step("Loading blend")
-        blend = load_pickle("blend.pickle")
-
-        #self._step("Loading SVD")
-        svd = load_pickle("svd.pickle")
-
-        #self._step("Loading projections")
-        projections = load_pickle("projections.pickle")
-        # HACK: infer what the study concepts were
-        study_concepts = set(projections.label_list(0))
-        study_concepts.remove('DefaultXAxis')
-        study_concepts.remove('DefaultYAxis')
+        docs = load_pickle("documents.smat")
+        spectral = load_pickle("spectral.rmat")
+        projections = load_pickle("projections.dmat")
 
         # Load stats
         stats = load_json_from_file(tgt("stats.json"))
 
-        return cls(for_study, blend, svd, projections, stats)
+        return cls(for_study, docs, projections, spectral, stats)
 
 class StudyDirectory(QtCore.QObject):
     '''
@@ -392,7 +432,7 @@ class StudyDirectory(QtCore.QObject):
         
 
     def get_matrices(self):
-        return dict((os.path.basename(filename), get_picklecached_thing(filename).normalized(mode=[0,1]).bake())
+        return dict((os.path.basename(filename), divisi2.load(filename))
                     for filename in self.get_matrices_files())
     
 
