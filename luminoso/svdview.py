@@ -4,8 +4,8 @@ from PyQt4.QtCore import Qt, QRectF as Rect, QPointF as Point, QLineF as Line, Q
 from PyQt4.QtGui import QApplication, QColor, QWidget, QImage, QPainter, QPen, QFont, QFontMetrics, QVBoxLayout, QComboBox, QLabel, QPushButton, QGridLayout, QCompleter
 import numpy as np
 from csc.util.persist import get_picklecached_thing
-from csc.divisi.tensor import data
 from collections import defaultdict
+from csc import divisi2
 
 # This initializes Qt, and nothing works without it. Even though we
 # don't use the "app" variable until the end.
@@ -61,13 +61,13 @@ class Projection(QObject):
 
     def components_to_projection(self, vec):
         try:
-            return np.dot(vec, self.matrix[:, :vec.shape[-1]])
+            return divisi2.dot(vec, self.matrix[:, :vec.shape[-1]])
         except ValueError:
             raise ValueError("Couldn't calculate dot product of %r (shape=%r, k=%d)" % (vec, vec.shape, self.k))
     
     def components_to_target(self, vec):
         try:
-            return np.dot(vec, self.target_matrix[:, :vec.shape[-1]])
+            return divisi2.dot(vec, self.target_matrix[:, :vec.shape[-1]])
         except ValueError:
             raise ValueError("Couldn't calculate dot product of %r (shape=%r, k=%d)" % (vec, vec.shape, self.k))
     
@@ -83,7 +83,7 @@ class Projection(QObject):
         """
         prev = self.target_matrix.copy()
         self.target_matrix[:,0] /= np.linalg.norm(self.target_matrix[:,0])
-        self.target_matrix[:,1] -= self.target_matrix[:,0] * np.dot(self.target_matrix[:,0], self.matrix[:,1])
+        self.target_matrix[:,1] -= self.target_matrix[:,0] * divisi2.dot(self.target_matrix[:,0], self.matrix[:,1])
         self.target_matrix[:,1] /= np.linalg.norm(self.target_matrix[:,1])
         self.target_matrix[:,:] = self.target_matrix*(power) + prev*(1-power)
         if np.any(np.isnan(self.target_matrix)):
@@ -93,7 +93,7 @@ class Projection(QObject):
 
     def move_towards(self, vec, target):
         orig = self.components_to_target(vec)
-        delta = (target - orig) / np.dot(vec, vec)
+        delta = (target - orig) / divisi2.dot(vec, vec)
         self.target_matrix += delta[np.newaxis,:] * vec[:,np.newaxis]
         magnitude = np.sum(delta**2)
         power = np.tanh(magnitude)/10
@@ -117,7 +117,7 @@ class Projection(QObject):
     def component(self, vec, reference):
         "Return the component of a vector in the direction of another vector."
         reference_norm = reference / np.linalg.norm(reference)
-        return reference_norm * np.dot(vec, reference_norm)
+        return reference_norm * divisi2.dot(vec, reference_norm)
 
     def next_axis(self):
         self.target_matrix = np.concatenate(
@@ -414,7 +414,7 @@ class SelectionLayer(Layer):
 class SimilarityLayer(Layer):
     def selectEvent(self, index):
         vec = self.luminoso.array[index]
-        sim = np.dot(self.luminoso.array, vec) / np.linalg.norm(vec) / np.sqrt(np.sum(self.luminoso.array ** 2, axis=1))
+        sim = divisi2.dot(self.luminoso.array, vec) / np.linalg.norm(vec) / np.sqrt(np.sum(self.luminoso.array ** 2, axis=1))
         sim_indices = np.clip(np.int32(sim*600 + 300), 0, 599)
         self.luminoso.colors = simcolors[sim_indices]
 
@@ -474,14 +474,14 @@ class CanonicalLayer(Layer):
         origin = np.zeros((2,))
         origin_pt = Point(*self.luminoso.projection_to_screen(origin))
         #painter.setCompositionMode(QPainter.CompositionMode_Screen)
-        for axis in xrange(self.luminoso.k):
-            projpoint = self.luminoso.projection.matrix[axis]/2
-            x, y = self.luminoso.projection_to_screen(projpoint)
-            target_pt = Point(x, y)
-            painter.setPen(QColor(100, 100, 100))
-            painter.drawLine(Line(origin_pt, target_pt))
-            painter.setPen(QColor(180, 180, 180))
-            painter.drawText(Point(x+2, y+2), str(axis))
+        #for axis in xrange(self.luminoso.k):
+        #    projpoint = self.luminoso.projection.matrix[axis]/2
+        #    x, y = self.luminoso.projection_to_screen(projpoint)
+        #    target_pt = Point(x, y)
+        #    painter.setPen(QColor(100, 100, 100))
+        #    painter.drawLine(Line(origin_pt, target_pt))
+        #    painter.setPen(QColor(180, 180, 180))
+        #    painter.drawText(Point(x+2, y+2), str(axis))
 
         painter.setPen(QColor(200, 200, 0))
         for canon in self.canonical:
@@ -498,22 +498,20 @@ class LinkLayer(Layer):
         self.matrix = matrix
         
         self.source = None
-        # poke the matrix to make sure it's loaded
-        self.matrix[self.matrix.labels((0, 0))]
         self.connections = []
 
     def selectEvent(self, selected_index):
         selectkey = self.luminoso.labels[selected_index]
         connections = []
-        if selectkey in self.matrix.label_list(0):
-            for (other,) in self.matrix[selectkey,:]:
+        if selectkey in self.matrix.row_labels:
+            for (value, other) in self.matrix.row_named(selectkey).named_entries():
                 try:
                     index = self.luminoso.labels.index(other)
                     connections.append(index)
                 except KeyError:
                     pass
-        if selectkey in self.matrix.label_list(1):
-            for (other,) in self.matrix[:,selectkey].keys():
+        if selectkey in self.matrix.col_labels:
+            for (value, other) in self.matrix.col_named(selectkey).named_entries():
                 try:
                     index = self.luminoso.labels.index(other)
                     connections.append(index)
@@ -544,7 +542,7 @@ class SVDViewer(QWidget):
         self.height = self.size().height()
 
         self.labels = labels
-        self.array = array
+        self.array = np.asarray(array)
         self.orig_array = self.array.copy()
 
         self.npoints = self.array.shape[0]
@@ -633,18 +631,18 @@ class SVDViewer(QWidget):
         self.update()
 
     @staticmethod
-    def make_svdview(tensor, svdtensor, canonical=None):
-        widget = SVDViewer(data(svdtensor), svdtensor.label_list(0))
+    def make_svdview(matrix, svdmatrix, canonical=None):
+        widget = SVDViewer(svdmatrix, svdmatrix.row_labels)
         widget.setup_standard_layers()
         widget.set_default_axes()
         if canonical is None: canonical = []
         widget.insert_layer(1, CanonicalLayer, canonical)
-        widget.insert_layer(2, LinkLayer, tensor.bake())
+        widget.insert_layer(2, LinkLayer, matrix)
         return widget
 
     @staticmethod
-    def make_colors(tensor, svdtensor):
-        widget = SVDViewer(data(svdtensor), svdtensor.label_list(0))
+    def make_colors(matrix, svdmatrix):
+        widget = SVDViewer(svdmatrix, svdmatrix.col_labels)
         widget.setup_standard_layers()
         
         from csc.concepttools.colors import text_color
@@ -669,14 +667,14 @@ class SVDViewer(QWidget):
         self.add_layer(PanZoomLayer)
     
     def set_default_axes(self):
-        self.set_axis_to_text(0, 'DefaultXAxis')
-        self.set_axis_to_text(1, 'DefaultYAxis')
+        self.set_axis_to_pc(0, 1)
+        self.set_axis_to_pc(1, 2)
     
     def set_default_x_axis(self):
-        self.set_axis_to_text(0, 'DefaultXAxis')
+        self.set_axis_to_pc(0, 1)
 
     def set_default_y_axis(self):
-        self.set_axis_to_text(1, 'DefaultYAxis')
+        self.set_axis_to_pc(1, 2)
 
     def set_axis_to_pc(self, axis, pc):
         """
@@ -736,9 +734,9 @@ class SVDViewer(QWidget):
         return (zoomed * self.screen_size) + self.screen_center
     
     def components_to_colors(self, coords):
-        while coords.shape[1] < 3:
+        while coords.shape[1] < 5:
             coords = np.concatenate([coords, -coords, coords], axis=1)
-        return np.clip(np.int32(coords[...,2:5]*3/self.scale + 128), 25, 230)
+        return np.clip(np.int32(coords[...,2:5]*8/self.scale + 160), 25, 230)
     
     def update_screenpts(self):
         self.screenpts = self.components_to_screen(self.array)
@@ -863,17 +861,19 @@ class SVDViewer(QWidget):
         self.update()
 
 def get_conceptnet():
-    from csc.conceptnet4.analogyspace import conceptnet_2d_from_db
-    return conceptnet_2d_from_db('en').normalized()
+    from csc.divisi2.network import conceptnet_matrix
+    return conceptnet_matrix('en').normalize_all()
+
+def get_analogyspace(cnet):
+    U, S, V = cnet.svd(k=100)
+    return U
 
 def main(app):
-    if len(sys.argv) > 1:
-        picklefile = sys.argv[1]
-    else:
-        picklefile = 'aspace.pickle'
-    cnet = get_picklecached_thing('cnet.pickle', get_conceptnet)
-    matrix = get_picklecached_thing(picklefile)
-    view = SVDViewer.make_svdview(cnet, matrix)
+    cnet = get_conceptnet()
+    U, S, V = cnet.svd(k=100)
+    aspace = U.extend(V)[:,:20]
+    print "loaded data"
+    view = SVDViewer.make_svdview(cnet, aspace)
     view.setGeometry(300, 300, 800, 600)
     view.setWindowTitle("SVDview")
     view.show()
@@ -909,14 +909,14 @@ class SVDViewPanel(QWidget):
         self.connect(self.y_chooser, SIGNAL("currentIndexChanged(QString)"), self.set_y_from_string)
     
         self.connect(self.x_chooser, SIGNAL("activate(QString)"), self.set_x_from_string)
-    def activate(self, blend, svd, canonical):
+    
+    def activate(self, docs, projections, canonical):
         self.deactivate()
-        self.viewer = SVDViewer.make_svdview(blend, svd, canonical)
+        self.viewer = SVDViewer.make_svdview(docs, projections, canonical)
         self.layout.addWidget(self.viewer, 0, 0, 1, 7)
         self.setup_choosers(canonical)
         self.connect(self.viewer.projection, SIGNAL('rotated()'), self.update_choosers)
         self.connect(self.viewer, SIGNAL('svdSelectEvent()'), self.viewer_selected)
-
     
     def viewer_selected(self):
         self.emit(SIGNAL('svdSelectEvent()'))

@@ -2,22 +2,26 @@
 This class provides the model to SVDView's view, calculating a blend of all
 the components of a study that it finds in the filesystem.
 """
+import sys, os
+if __name__ == '__main__':
+    # prepare for other imports
+    sys.path.extend([os.path.join(os.path.dirname(sys.argv[0]), "lib"),
+                     os.path.dirname(sys.argv[0])])
+
 from PyQt4 import QtCore
 import os, codecs, time
 import cPickle as pickle
 import numpy as np
 import traceback
 import logging
-import zipfile
+import hashlib
 import chardet
 logger = logging.getLogger('luminoso')
 
 from standalone_nlp.lang_en import nltools as en_nl
-from csc.util.persist import get_picklecached_thing
-from csc.divisi.labeled_view import make_sparse_labeled_tensor, LabeledView
-from csc.divisi.ordered_set import OrderedSet
-from csc.divisi.tensor import DenseTensor, data
-from csc.divisi.blend import Blend
+from csc import divisi2
+from csc.divisi2.blending import blend
+from csc.divisi2.ordered_set import OrderedSet
 
 from luminoso.whereami import package_dir
 from luminoso.report import render_info_page, default_info_page
@@ -29,11 +33,54 @@ try:
 except ImportError:
     import simplejson as json
 
+class OutdatedAnalysisError(Exception):
+    pass
+
+class Document(object):
+    '''
+    A Document is an entity in a Study.
+    '''
+    def __init__(self, name, text):
+        self.name = name
+        self.text = text
+
+    @classmethod
+    def from_file(cls, filename, name):
+        # Open in text mode.
+        rawtext = open(filename, 'r')
+        encoding = chardet.detect(rawtext.read())['encoding']
+        rawtext.close()
+        text = codecs.open(filename, encoding=encoding, errors='replace').read()
+        return cls(name, text)
+
+    def extract_concepts_with_negation(self):
+        return extract_concepts_with_negation(self.text)
+
+    def get_sentences(self):
+        words = en_nl.tokenize(self.text).split()
+        sentences = []
+        current_sentence = []
+        for word in words:
+            if word in PUNCTUATION:
+                if len(current_sentence) > 2:
+                    sentences.append(current_sentence)
+                    current_sentence = []
+            else:
+                current_sentence.append(word)
+        sentences.append(current_sentence)
+        return sentences
+
+class CanonicalDocument(Document):
+    pass
+
+
 NEGATION = ['no', 'not', 'never', 'stop', 'lack', "n't"]
-PUNCTUATION = ['.', ',', '!', '?', '...', '-']
+PUNCTUATION = ['.', ',', '!', '?', '...', '-', ':', ';']
 def extract_concepts_with_negation(text):
-    words = en_nl.normalize(en_nl.tokenize(text)).split()
-    
+    words = en_nl.tokenize(text).split()
+    return extract_concepts_from_words(words)
+
+def extract_concepts_from_words(words):
     # FIXME: this may join together words from different contexts...
     positive_words = []
     negative_words = []
@@ -52,25 +99,299 @@ def extract_concepts_with_negation(text):
     negative_concepts = [(c, -1) for c in en_nl.extract_concepts(' '.join(negative_words))]
     return positive_concepts + negative_concepts
 
+def load_json_from_file(file):
+    with open(file) as f:
+        return json.load(f)
+
 def write_json_to_file(data, file):
-    f = open(file, 'w')
-    json.dump(data, f)
-    f.close()
+    with open(file, 'w') as f:
+        json.dump(data, f)
 
-class LuminosoStudy(QtCore.QObject):
-    def __init__(self, dir):
+class Study(QtCore.QObject):
+    '''
+    A Study is a collection of documents and other matrices that can be analyzed.
+    '''
+    def __init__(self, name, documents, canonical, other_matrices, num_axes=20):
         QtCore.QObject.__init__(self)
-        self.dir = dir.rstrip(os.path.sep)
-        self.load_settings()
+        self.name = name
+        self.study_documents = documents
+        self.canonical_documents = canonical
+        # self.documents is now a property
+        self._documents_matrix = None
+        self.other_matrices = other_matrices
+        self.num_axes = num_axes
+        
+    def _step(self, msg):
+        logger.info(msg)
+        self.emit(QtCore.SIGNAL('step(QString)'), msg)
 
-        self.blend = None
-        self.svd = None
-        self.projections = None
-        self.study_concepts = None
+    def get_contents_hash(self):
+        def sha1(txt):
+            if isinstance(txt, unicode): txt = txt.encode('utf-8')
+            return hashlib.sha1(txt).hexdigest()
+
+        docs = dict((doc.name, (isinstance(doc, CanonicalDocument),
+                                sha1(doc.text)))
+                    for doc in self.documents)
+        matrices = tuple(sorted(self.other_matrices.keys()))
+
+        # TODO: make sure matrices have a meaningful `hash`.
+        #matrices = dict((name, hash(mat)) for name, mat in self.other_matrices.items())
+        return dict(docs=docs, matrices=matrices)
+
+    @property
+    def num_documents(self):
+        return len(self.documents)
+
+    @property
+    def documents(self):
+        return self.study_documents + self.canonical_documents
+    
+    def get_documents_matrix(self):
+        """
+        Get a matrix of documents vs. concepts.
+
+        This is temporarily cached (besides what StudyDir does) because it
+        will be needed multiple times in analyzing a study.
+        """
+        self._step('Building document matrix...')
+        if self.num_documents == 0: return None
+        if self._documents_matrix is not None:
+            return self._documents_matrix
+        entries = []
+        for doc in self.documents:
+            for concept, value in doc.extract_concepts_with_negation():
+                if not en_nl.is_blacklisted(concept):
+                    entries.append((value, doc.name, concept))
+        self._documents_matrix = divisi2.make_sparse(entries)
+        return self._documents_matrix
+    
+    def get_documents_assoc(self):
+        self._step('Finding associated concepts...')
+        if self.num_documents == 0: return None
+        entries = []
+        for doc in self.study_documents:
+            concepts = doc.extract_concepts_with_negation()[:100]
+            for concept1, value1 in concepts:
+                for concept2, value2 in concepts:
+                    entries.append( (value1*value2, concept1, concept2) )
+                    entries.append( (value1*value2, concept2, concept1) )
+            for sentence in doc.get_sentences():
+                # avoid insane space usage by limiting to 100 words
+                concepts = extract_concepts_from_words(sentence[:100])
+                for concept1, value1 in concepts:
+                    for concept2, value2 in concepts:
+                        entries.append( (value1*value2, concept1, concept2) )
+                        entries.append( (value1*value2, concept2, concept1) )
+        return divisi2.SparseMatrix.square_from_named_entries(entries)
+
+    def get_assoc_blend(self):
+        other_matrices = []
+        doc_matrix = self.get_documents_assoc()
+        self._step('Blending...')
+        for name, matrix in self.other_matrices.items():
+            # use association matrices only
+            # (unless we figure out how to do both kinds of blending)
+            if name.endswith('.assoc.smat'):
+                if matrix.shape[0] != matrix.shape[1]:
+                    raise ValueError("The matrix %s is not square" % name)
+                other_matrices.append(matrix)
+
+        if doc_matrix is None:
+            theblend = blend(other_matrices)
+            study_concepts = set(theblend.row_labels)
+        else:
+            theblend = blend([doc_matrix] + other_matrices)
+            study_concepts = set(doc_matrix.row_labels)
+        return theblend, study_concepts
+
+    def get_eigenstuff(self):
+        self._step('Finding eigenvectors...')
+        document_matrix = self.get_documents_matrix()
+        theblend, study_concepts = self.get_assoc_blend()
+        U, Sigma, V = theblend.normalize_all().svd(k=self.num_axes)
+        indices = [U.row_index(concept) for concept in study_concepts]
+        reduced_U = U[indices]
+        doc_rows = divisi2.aligned_matrix_multiply(document_matrix.normalize_rows(), reduced_U)
+        projections = reduced_U.extend(doc_rows)
+        return document_matrix, projections, Sigma
+
+    def compute_stats(self, docs, spectral):
+        """
+        Calculate statistics.
+
+        Consistency: how tightly-clustered the documents are in the spectral
+        decomposition space.
+
+        Centrality: a Z-score for how "central" each concept and document
+        is. Same general idea as "congruence" from Luminoso 1.0.
+        """
+
+        if len(self.study_documents) == 0:
+            # consistency and centrality are undefined
+            consistency = None
+            centrality = None
+            core = None
+        else:
+            concept_sums = docs.col_op(np.sum)
+            doc_indices = [spectral.left.row_index(doc.name) for doc in
+                           self.study_documents]
+            
+            # Compute the association of all study documents with each other
+            reference_assoc = np.asarray(spectral[doc_indices, doc_indices].to_dense())
+            reference_mean = np.mean(reference_assoc)
+            reference_stdev = np.std(reference_assoc)
+            reference_stderr = reference_stdev / len(doc_indices)
+            consistency = reference_mean / reference_stderr
+
+            ztest_stderr = reference_stdev / np.sqrt(len(doc_indices))
+
+            all_assoc = np.asarray(spectral[:, doc_indices].to_dense())
+            all_means = np.mean(all_assoc, axis=1)
+            all_stdev = np.std(all_assoc, axis=1)
+            all_stderr = all_stdev / np.sqrt(len(doc_indices))
+            centrality = divisi2.DenseVector((all_means - reference_mean) /
+            ztest_stderr, spectral.row_labels)
+            core = centrality.top_items(50)
+            core = [c[0] for c in core
+                    if c[0] in concept_sums.labels
+                    and concept_sums.entry_named(c[0]) >= 2][:10]
+
+            c_centrality = {}
+            for doc in self.canonical_documents:
+                c_centrality[doc.name] = centrality.entry_named(doc.name)
+        
+        return {
+            'num_documents': self.num_documents,
+            'num_concepts': spectral.shape[0] - self.num_documents,
+            'consistency': consistency,
+            'centrality': c_centrality,
+            'core': core,
+            'timestamp': list(time.localtime())
+        }
+    
+    def analyze(self):
+        # TODO: make it possible to blend multiple directories
+        self._documents_matrix = None
+        docs, projections, Sigma = self.get_eigenstuff()
+        spectral = divisi2.reconstruct_activation(projections, Sigma, post_normalize=False)
+        self._step('Calculating stats...')
+        stats = self.compute_stats(docs, spectral)
+        
+        results = StudyResults(self, docs, spectral.left, spectral, stats)
+        return results
+
+
+class StudyResults(QtCore.QObject):
+    def __init__(self, study, docs, projections, spectral, stats):
+        QtCore.QObject.__init__(self)
+        self.study = study
+        self.docs = docs
+        self.spectral = spectral
+        self.projections = projections
+        self.stats = stats
+        self.canonical_filenames = [doc.name for doc in study.canonical_documents]
         self.info = None
-        self.stats = None
-        self.update_canonical()
-        #self.load_pickle_cache()
+
+    def write_coords_as_csv(self, filename):
+        # FIXME: not divisi2 ready
+        raise NotImplementedError
+
+        import csv
+        x_axis = self.projections['DefaultXAxis',:].hat()
+        y_axis = self.projections['DefaultYAxis',:].hat()
+        output = open(filename, 'w')
+        writer = csv.writer(output)
+        writer.writerow(['Concept', 'X projection', 'Y projection', 'Coordinates'])
+        for concept in self.study_concepts:
+            xproj = self.projections[concept,:] * x_axis
+            yproj = self.projections[concept,:] * y_axis
+            coords = self.projections[concept,:].values()
+            row = [concept.encode('utf-8'), xproj, yproj] + coords
+            writer.writerow(row)
+        output.close()
+
+    def write_report(self, filename):
+        if self.stats is None: return
+        self.info = render_info_page(self)
+        with open(filename, 'w') as out:
+            out.write(self.info)
+        return self.info
+
+    def get_consistency(self):
+        return self.stats['consistency']
+
+    def get_congruence(self, concept):
+        return self.stats['congruence'][concept]
+
+    def get_info(self):
+        if self.info is not None: return self.info
+        else: return default_info_page(self.study)
+
+    def save(self, dir):
+        def tgt(name): return os.path.join(dir, name)
+        def save_pickle(name, obj):
+            with open(tgt(name), 'wb') as out:
+                pickle.dump(obj, out, -1)
+
+        self.study._step('Saving document matrix...')
+        save_pickle("documents.smat", self.docs)
+
+        self.study._step('Saving eigenvectors...')
+        save_pickle("spectral.rmat", self.spectral)
+        
+        self.study._step('Saving projections...')
+        save_pickle('projections.dmat', self.projections)
+
+        self.study._step('Writing reports...')
+        # Save stats
+        write_json_to_file(self.stats, tgt("stats.json"))
+        self.write_report(tgt("report.html"))
+
+        # Save input contents hash to know if the study has changed.
+        save_pickle('input_hash.pickle', self.study.get_contents_hash())
+
+    @classmethod
+    def load(cls, dir, for_study):
+        def tgt(name): return os.path.join(dir, name)
+        def load_pickle(name):
+            with open(tgt(name), 'rb') as f:
+                return pickle.load(f)
+
+        # Either this will all fail or all succeed.
+        try:
+            input_hash = load_pickle('input_hash.pickle')
+        except IOError:
+            raise OutdatedAnalysisError()
+        cur_hash = for_study.get_contents_hash()
+        if input_hash != cur_hash:
+            raise OutdatedAnalysisError()
+        
+        for_study._step('Loading document matrix...')
+        docs = load_pickle("documents.smat")
+        for_study._step('Loading eigenvectors...')
+        spectral = load_pickle("spectral.rmat")
+        for_study._step('Loading projections...')
+        projections = load_pickle("projections.dmat")
+
+        # Load stats
+        for_study._step('Loading stats...')
+        stats = load_json_from_file(tgt("stats.json"))
+
+        return cls(for_study, docs, projections, spectral, stats)
+
+class StudyDirectory(QtCore.QObject):
+    '''
+    A StudyDirectory manages the directory representing a study. It has three responsibilites:
+     - loading the documents, both study and canonical
+     - storing settings, such as the number of axes to compute
+     - caching analysis results for speed
+    '''
+    def __init__(self, dir):
+        self.dir = dir.rstrip(os.path.sep)
+        QtCore.QObject.__init__(self)
+
+        self.load_settings()
 
     @staticmethod
     def make_new(destdir):
@@ -82,13 +403,16 @@ class LuminosoStudy(QtCore.QObject):
         shutil.copy(os.path.join(package_dir, 'study_skel', 'Matrices', 'conceptnet.pickle'), os.path.join(destdir, 'Matrices', 'conceptnet.pickle'))
         write_json_to_file({}, dest_path('settings.json'))
 
-        return LuminosoStudy(destdir)
+        return StudyDirectory(destdir)
+    
+    def _ensure_dir_exists(self, targetdir):
+        path = os.path.join(self.dir, targetdir)
+        if not os.path.exists(path):
+            os.mkdir(path)
 
     def load_settings(self):
         try:
-            settings_file = open(self.get_settings_file())
-            self.settings = json.load(settings_file)
-            settings_file.close()
+            self.settings = load_json_from_file(self.get_settings_file())
         except (IOError, ValueError):
             self.settings = {}
             traceback.print_exc()
@@ -96,75 +420,30 @@ class LuminosoStudy(QtCore.QObject):
     def save_settings(self):
         write_json_to_file(self.settings, self.get_settings_file())
     
-    def load_pickle_cache(self):
-        self._load_blend()
-        self._load_projections()
-        self._load_svd()
-        self._load_stats()
-
     def _step(self, msg):
         logger.info(msg)
         self.emit(QtCore.SIGNAL('step(QString)'), msg)
     
-    def _load_blend(self):
-        self._step("Loading blend")
-        try:
-            blend_p = open(self.study_path("Results/blend.pickle"))
-            self.blend = pickle.load(blend_p)
-            blend_p.close()
-        except IOError:
-            logger.info("No blend file in study")
-
-    def _load_projections(self):
-        self._step("Loading projections")
-        try:
-            projections_p = open(self.study_path("Results/projections.pickle"))
-            self.projections = pickle.load(projections_p)
-            self.study_concepts = set(self.projections.label_list(0))
-            self.study_concepts.remove('DefaultXAxis')
-            self.study_concepts.remove('DefaultYAxis')
-            projections_p.close()
-        except IOError:
-            logger.info("No projections file in study")
-
-    def _load_svd(self):
-        self._step("Loading SVD")
-        try:
-            svd_p = open(self.study_path("Results/svd.pickle"))
-            self.svd = pickle.load(svd_p)
-            svd_p.close()
-        except IOError:
-            logger.info("No svd file in study")
-
-    def _load_stats(self):
-        self._step("Loading stats")
-        try:
-            stats_p = open(self.study_path("Results/stats.json"))
-            self.stats = json.load(stats_p)
-            stats_p.close()
-            self.make_info_page()
-        except (IOError, ValueError):
-            logger.info("No stats file in study")
-
     def study_path(self, path):
         return self.dir + os.path.sep + path
-
-    def get_name(self):
-        return self.dir.split(os.path.sep)[-1]
 
     def get_settings_file(self):
         return self.study_path("settings.json")
 
     def get_canonical_dir(self):
+        self._ensure_dir_exists("Canonical")
         return self.study_path("Canonical")
 
     def get_documents_dir(self):
+        self._ensure_dir_exists("Documents")
         return self.study_path("Documents")
 
     def get_matrices_dir(self):
+        self._ensure_dir_exists("Matrices")
         return self.study_path("Matrices")
         
     def get_results_dir(self):
+        self._ensure_dir_exists("Results")
         return self.study_path("Results")
     
     def listdir(self, dir, text_only, full_names):
@@ -175,216 +454,64 @@ class LuminosoStudy(QtCore.QObject):
         else:
             return files
 
-    def update_canonical(self): 
-        self.canonical_docs = self.listdir('Canonical', text_only=True, full_names=False)
-
-    def get_documents_files(self):
-        return self.listdir('Documents', text_only=True, full_names=True) + self.listdir('Canonical', text_only=True, full_names=True)
-
     def get_matrices_files(self):
+        self._ensure_dir_exists("Matrices")
         return self.listdir('Matrices', text_only=False, full_names=True)
+
+    def get_documents(self):
+        study_documents = [Document.from_file(filename, name=os.path.basename(filename))
+                           for filename in self.listdir('Documents', text_only=True, full_names=True)]
+        return study_documents
+
+    def get_canonical_documents(self):
+        canonical_documents = [CanonicalDocument.from_file(filename, name=os.path.basename(filename))
+                               for filename in self.listdir('Canonical', text_only=True, full_names=True)]
+        return canonical_documents
+
+    def get_matrices(self):
+        return dict((os.path.basename(filename), divisi2.load(filename))
+                    for filename in self.get_matrices_files())
     
-    def get_documents_matrix(self):
-        if self.get_documents_files():
-            documents_matrix = make_sparse_labeled_tensor(ndim=2)
-            for filename in self.get_documents_files():
-                # because we're dealing with plain text, we have to auto
-                rawtext = open(filename)
-                encoding = chardet.detect(rawtext.read())['encoding']
-                rawtext.close()
-                text = codecs.open(filename, encoding=encoding, errors='replace').read()
-                short_filename = os.path.basename(filename)
-                extracted = extract_concepts_with_negation(text)
-                for concept, value in extracted:
-                    if not en_nl.is_blacklisted(concept):
-                        documents_matrix[concept, short_filename] += value
 
-            matrix_norm = documents_matrix.normalized(mode=[0,1]).bake()
-            return matrix_norm
-        else:
-            return None
+    def get_study(self):
+        return Study(name=self.dir.split(os.path.sep)[-1],
+                     documents=self.get_documents(),
+                     canonical=self.get_canonical_documents(),
+                     other_matrices=self.get_matrices(),
+                     num_axes = self.settings.get('axes',20))
 
-    def load_matrices(self):
-        matrices = []
-        for filename in self.get_matrices_files():
-            matrices.append(get_picklecached_thing(filename).normalized(mode=[0,1]).bake())
-        return matrices
-    
-    def get_blend(self):
-        other_matrices = self.load_matrices()
-        doc_matrix = self.get_documents_matrix()
-
-        if doc_matrix is not None:
-            blend = Blend([doc_matrix] + other_matrices)
-            self.study_concepts = set(doc_matrix.label_list(0)) | set(doc_matrix.label_list(1))
-        else:
-            if len(other_matrices) == 1:
-                blend = other_matrices[0]
-            else:
-                blend = Blend(other_matrices)
-            self.study_concepts = set(blend.label_list(0))
-        
-        out = open(self.study_path("Results/blend.pickle"), 'wb')
-        pickle.dump(blend, out)
-        out.close()
-
-        self.blend = blend
-        if doc_matrix:
-            self.settings['documents'] = list(doc_matrix.label_list(1))
-        else:
-            self.settings['documents'] = []
-        self.save_settings()
-        return blend
-    
-    def study_filter(self, concept):
-        return concept in self.study_concepts
-    
-    def write_csv(self):
-        import csv
-        docs = self.settings.get('documents', [])
-        x_axis = self.projections['DefaultXAxis',:].hat()
-        y_axis = self.projections['DefaultYAxis',:].hat()
-        output = open(self.study_path("Results/coords.csv"), 'w')
-        writer = csv.writer(output)
-        writer.writerow(['Concept', 'X projection', 'Y projection', 'Coordinates'])
-        for concept in self.study_concepts:
-            xproj = self.projections[concept,:] * x_axis
-            yproj = self.projections[concept,:] * y_axis
-            coords = self.projections[concept,:].values()
-            row = [concept.encode('utf-8'), xproj, yproj] + coords
-            writer.writerow(row)
-        output.close()
-
-    def calculate_stats(self):
-        """
-        FIXME: On large datasets, calculating every pairwise similarity might
-        be too expensive. Cut down the size of the working matrix somehow?
-        """
-        projdata = data(self.projections)
-        svals = data(self.svd.svals)
-        
-        # build an array of documents vs. axes
-        docdata = []
-        document_list = self.settings.get('documents')
-        if document_list:
-            for doc in self.settings['documents']:
-                docdata.append(data(self.projections[doc,:]))
-            docdata = np.array(docdata)
-            simdata = np.dot(projdata * svals, docdata.T)
-            
-            mean = np.mean(simdata)
-            stdev = np.std(simdata)
-            n = simdata.shape[0] * simdata.shape[1]
-            stderr = stdev/np.sqrt(n)
-
-            congruence = {}
-            for index, concept in enumerate(self.study_concepts):
-                if not en_nl.is_blacklisted(concept):
-                    vec = simdata[index]
-                    cmean = np.mean(vec)
-                    cstdev = np.std(vec)
-                    cstderr = cstdev / np.sqrt(len(vec))
-                    z = (cmean - mean) / cstderr
-                    congruence[concept] = z
-            consistency = mean/stderr
-            self.stats = {
-                'mean': mean,
-                'stdev': stdev,
-                'n': n,
-                'consistency': consistency,
-                'congruence': congruence,
-                'timestamp': list(time.localtime())
-            }
-            write_json_to_file(self.stats, self.study_path("Results/stats.json"))
-            self.report_stats()
-            return self.stats
-        else:
-            return {}
-    
-    def make_info_page(self):
-        if self.stats is not None:
-            self.info = render_info_page(self)
-
-    def report_stats(self):
-        self.make_info_page()
-        if self.info:
-            out = open(self.study_path("Results/report.html"), 'w')
-            out.write(self.info)
-            out.close()
-
-    def get_consistency(self):
-        return self.stats['consistency']
-
-    def get_congruence(self, concept):
-        return self.stats['congruence'][concept]
+    def analyze(self):
+        study = self.get_study()
+        results = study.analyze()
+        self._ensure_dir_exists('Results')
+        results.save(self.study_path('Results'))
+        return results
 
     def set_num_axes(self, axes):
         self.settings['axes'] = axes
+        self.study.num_axes = axes
         self.save_settings()
-
-    def get_info(self):
-        if self.info is not None: return self.info
-        else: return default_info_page(self)
-
-    def analyze(self):
-        # TODO: recursive svd, congruence, consistency
-
-        # TODO: make it possible to read in multiple directories and
-        # blend them
-        k = self.settings.get('axes', 20)
-
-        self._step('Blending...')
-        blend = self.get_blend()
-        svd = blend.svd(k=k)
-        self.svd = svd
-         
-        self._step('Concatenating...')
-        concatenated = svd.get_weighted_u().concatenate(svd.v)
-        new_concepts = OrderedSet(self.study_concepts)
-        new_data = np.zeros((len(new_concepts), svd.u.shape[1]))
-        new_matrix = LabeledView(DenseTensor(new_data), [new_concepts, None])
-        for index in xrange(len(new_concepts)):
-            new_data[index, :] = data(concatenated[new_concepts[index], :])
-        
-        self._step('Finding interesting axes...')
-        newsvd = new_matrix.svd(k=k)
-        axis_labels = OrderedSet(['DefaultXAxis', 'DefaultYAxis'])
-        extra_axis_data = data(newsvd.v.T)[0:2, :] / 1000
-        extra_axis_matrix = LabeledView(DenseTensor(extra_axis_data), [axis_labels, None])
-        self.projections = new_matrix.concatenate(extra_axis_matrix)
-
-        self._step('Saving SVD...')
-        out = open(self.study_path("Results/svd.pickle"), 'wb')
-        pickle.dump(self.svd, out)
-        out.close()
-        
-        self._step('Saving projections...')
-        out = open(self.study_path("Results/projections.pickle"), 'wb')
-        pickle.dump(self.projections, out)
-        out.close()
-
-        self._step('Calculating stats...')
-        self.calculate_stats()
-        self.report_stats()
-        self._step('Writing CSV...')
-        self.write_csv()
-        
     
-        if self.stats is not None:
-            return (blend, self.projections, self.svd, self.stats)
-        else:
-            return (blend, self.projections, self.svd, None)
+    def get_existing_analysis(self):
+        # FIXME: this loads the study twice, I think
+        try:
+            return StudyResults.load(self.study_path('Results'), self.get_study())
+        except OutdatedAnalysisError:
+            return None
 
 def test():
-    study = LuminosoStudy('../ThaiFoodStudy')
+    study = StudyDirectory('../ThaiFoodStudy')
     study.analyze()
 
 if __name__ == '__main__':
-    import cProfile as profile
-    import pstats
-    profile.run('test()', 'study.profile')
-    test()
+    DO_PROFILE=False
+    if DO_PROFILE:
+        import cProfile as profile
+        import pstats
+        profile.run('test()', 'study.profile')
+        p = pstats.Stats('study.profile')
+        p.sort_stats('time').print_stats(50)
+    else:
+        test()
 
-    p = pstats.Stats('study.profile')
-    p.sort_stats('time').print_stats(50)
 
