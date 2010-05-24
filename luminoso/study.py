@@ -105,10 +105,12 @@ class Study(QtCore.QObject):
     '''
     A Study is a collection of documents and other matrices that can be analyzed.
     '''
-    def __init__(self, name, documents, other_matrices):
+    def __init__(self, name, documents, canonical, other_matrices):
         QtCore.QObject.__init__(self)
         self.name = name
-        self.documents = documents
+        self.study_documents = documents
+        self.canonical_documents = canonical
+        # self.documents is now a property
         self._documents_matrix = None
         self.other_matrices = other_matrices
         self.num_axes = 20
@@ -119,7 +121,11 @@ class Study(QtCore.QObject):
 
     def get_contents_hash(self):
         def sha1(txt): return hashlib.sha1(txt).hexdigest()
-        docs = dict((doc.name, (isinstance(doc, CanonicalDocument), sha1(doc.text))) for doc in self.documents)
+
+        docs = dict((doc.name, (isinstance(doc, CanonicalDocument),
+                                sha1(doc.text)))
+                    for doc in self.documents)
+
         matrices = dict((name, hash(mat)) for name, mat in self.other_matrices.items())
         # TODO: make sure matrices have a meaningful `hash`.
         return dict(docs=docs, matrices=matrices)
@@ -127,6 +133,10 @@ class Study(QtCore.QObject):
     @property
     def num_documents(self):
         return len(self.documents)
+
+    @property
+    def documents(self):
+        return self.study_documents + self.canonical_documents
     
     def get_documents_matrix(self):
         """
@@ -151,11 +161,7 @@ class Study(QtCore.QObject):
         self._step('Finding associated concepts...')
         if self.num_documents == 0: return None
         entries = []
-        for doc in self.documents:
-            if isinstance(doc, CanonicalDocument):
-                # canonical docs must not affect the analysis
-                continue
-
+        for doc in self.study_documents:
             for sentence in doc.get_sentences():
                 # avoid insane space usage by limiting to 100 words
                 concepts = extract_concepts_from_words(sentence[:100])
@@ -204,6 +210,8 @@ class Study(QtCore.QObject):
         be too expensive. Cut down the size of the working matrix somehow?
         """
         return None
+
+        
 
         standard_docs_projections = divisi2.aligned_matrix_multiply(docs,
         projections)
@@ -419,11 +427,12 @@ class StudyDirectory(QtCore.QObject):
     def get_documents(self):
         study_documents = [Document.from_file(filename, name=os.path.basename(filename))
                            for filename in self.listdir('Documents', text_only=True, full_names=True)]
+        return study_documents
+
+    def get_canonical_documents(self):
         canonical_documents = [CanonicalDocument.from_file(filename, name=os.path.basename(filename))
                                for filename in self.listdir('Canonical', text_only=True, full_names=True)]
-        return study_documents + canonical_documents
-    #self.canonical_docs = [doc.name for doc in self.canonical_documents]
-        
+        return canonical_documents
 
     def get_matrices(self):
         return dict((os.path.basename(filename), divisi2.load(filename))
@@ -432,7 +441,9 @@ class StudyDirectory(QtCore.QObject):
 
     def get_study(self):
         return Study(name=self.dir.split(os.path.sep)[-1],
-                     documents=self.get_documents(), other_matrices=self.get_matrices())
+                     documents=self.get_documents(),
+                     canonical=self.get_canonical_documents(),
+                     other_matrices=self.get_matrices())
 
     def analyze(self):
         study = self.get_study()
