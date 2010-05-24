@@ -230,11 +230,14 @@ class Study(QtCore.QObject):
             reference_stderr = reference_stdev / len(doc_indices)
             consistency = reference_mean / reference_stderr
 
+            ztest_stderr = reference_stdev / np.sqrt(len(doc_indices))
+
             all_assoc = np.asarray(spectral[:, doc_indices].to_dense())
             all_means = np.mean(all_assoc, axis=1)
             all_stdev = np.std(all_assoc, axis=1)
             all_stderr = all_stdev / np.sqrt(len(doc_indices))
-            centrality = divisi2.DenseVector((all_means - reference_mean) / all_stderr, spectral.row_labels)
+            centrality = divisi2.DenseVector((all_means - reference_mean) /
+            ztest_stderr, spectral.row_labels)
             core = centrality.top_items(50)
             core = [c[0] for c in core
                     if c[0] in concept_sums.labels
