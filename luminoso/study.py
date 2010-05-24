@@ -202,58 +202,55 @@ class Study(QtCore.QObject):
         projections = reduced_U.extend(doc_rows)
         return document_matrix, projections, Sigma
 
-    def compute_stats(self, docs, projections, spectral):
+    def compute_stats(self, docs, spectral):
         """
-        DOUBLE FIXME: this isn't divisi2 ready
+        Calculate statistics.
 
-        FIXME: On large datasets, calculating every pairwise similarity might
-        be too expensive. Cut down the size of the working matrix somehow?
+        Consistency: how tightly-clustered the documents are in the spectral
+        decomposition space.
+
+        Centrality: a Z-score for how "central" each concept and document
+        is. Same general idea as "congruence" from Luminoso 1.0.
         """
-        return None
 
+        if len(self.study_documents) == 0:
+            # consistency and centrality are undefined
+            consistency = None
+            centrality = None
+            core = None
+        else:
+            concept_sums = docs.col_op(np.sum)
+            doc_indices = [spectral.left.row_index(doc.name) for doc in
+                           self.study_documents]
+            
+            # Compute the association of all study documents with each other
+            reference_assoc = spectral[doc_indices, doc_indices].to_dense()
+            reference_mean = np.mean(reference_assoc)
+            reference_stdev = np.std(reference_assoc)
+            reference_stderr = reference_stdev / len(doc_indices)
+            consistency = reference_mean / reference_stderr
+
+            all_assoc = np.asarray(spectral[:, doc_indices].to_dense())
+            all_means = np.mean(all_assoc, axis=1)
+            all_stdev = np.std(all_assoc, axis=1)
+            all_stderr = all_stdev / np.sqrt(len(doc_indices))
+            centrality = divisi2.DenseVector(all_means / all_stderr,
+                                             spectral.row_labels)
+            core = centrality.top_items(50)
+            core = [c[0] for c in core
+                    if c[0] in concept_sums.labels
+                    and concept_sums.entry_named(c[0]) >= 2][:10]
+
+            c_centrality = {}
+            for doc in self.canonical_documents:
+                c_centrality[doc.name] = centrality.entry_named(doc.name)
         
-
-        standard_docs_projections = divisi2.aligned_matrix_multiply(docs,
-        projections)
-
-        # left off here
-
-        for doc in self.get_documents():
-            if isinstance(doc, CanonicalDocument): continue
-            for doc2 in self.get_documents():
-                pass
-        
-        projdata = data(projections)
-        svals = data(svd.svals)
-        
-        # build an array of documents vs. axes
-        docdata = [data(self.projections[doc.name,:])
-                   for doc in self.documents]
-        if not docdata: return {}
-        docdata = np.array(docdata)
-        simdata = np.dot(projdata * svals, docdata.T)
-
-        mean = np.mean(simdata)
-        stdev = np.std(simdata)
-        n = simdata.shape[0] * simdata.shape[1]
-        stderr = stdev/np.sqrt(n)
-
-        congruence = {}
-        for index, concept in enumerate(study_concepts):
-            if not en_nl.is_blacklisted(concept):
-                vec = simdata[index]
-                cmean = np.mean(vec)
-                cstdev = np.std(vec)
-                cstderr = cstdev / np.sqrt(len(vec))
-                z = (cmean - mean) / cstderr
-                congruence[concept] = z
-        consistency = mean/stderr
         return {
-            'mean': mean,
-            'stdev': stdev,
-            'n': n,
+            'num_documents': self.num_documents,
+            'num_concepts': spectral.shape[0] - self.num_documents,
             'consistency': consistency,
-            'congruence': congruence,
+            'centrality': c_centrality,
+            'core': core,
             'timestamp': list(time.localtime())
         }
 
@@ -263,7 +260,7 @@ class Study(QtCore.QObject):
         docs, projections, Sigma = self.get_eigenstuff()
         spectral = divisi2.reconstruct_activation(projections, Sigma)
         self._step('Calculating stats...')
-        stats = self.compute_stats(docs, projections, spectral)
+        stats = self.compute_stats(docs, spectral)
         
         return StudyResults(self, docs, projections, spectral, stats)
 
@@ -317,16 +314,16 @@ class StudyResults(QtCore.QObject):
             with open(tgt(name), 'wb') as out:
                 pickle.dump(obj, out, -1)
 
-        #self._step('Saving blend...')
+        self.study._step('Saving document matrix...')
         save_pickle("documents.smat", self.docs)
 
-        #self._step('Saving eigenvectors...')
+        self.study._step('Saving eigenvectors...')
         save_pickle("spectral.rmat", self.spectral)
         
-        #self._step('Saving projections...')
+        self.study._step('Saving projections...')
         save_pickle('projections.dmat', self.projections)
 
-        #self._step('Writing reports...')
+        self.study._step('Writing reports...')
         # Save stats
         write_json_to_file(self.stats, tgt("stats.json"))
         self.write_report(tgt("report.html"))
@@ -347,11 +344,15 @@ class StudyResults(QtCore.QObject):
         if input_hash != cur_hash:
             raise OutdatedAnalysisError()
         
+        for_study._step('Loading document matrix...')
         docs = load_pickle("documents.smat")
+        for_study._step('Loading eigenvectors...')
         spectral = load_pickle("spectral.rmat")
+        for_study._step('Loading projections...')
         projections = load_pickle("projections.dmat")
 
         # Load stats
+        for_study._step('Loading stats...')
         stats = load_json_from_file(tgt("stats.json"))
 
         return cls(for_study, docs, projections, spectral, stats)
