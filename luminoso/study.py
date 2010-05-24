@@ -205,7 +205,7 @@ class Study(QtCore.QObject):
         U, Sigma, V = theblend.normalize_all().svd(k=self.num_axes)
         indices = [U.row_index(concept) for concept in study_concepts]
         reduced_U = U[indices]
-        doc_rows = divisi2.aligned_matrix_multiply(document_matrix, reduced_U)
+        doc_rows = divisi2.aligned_matrix_multiply(document_matrix.normalize_rows(), reduced_U)
         projections = reduced_U.extend(doc_rows)
         return document_matrix, projections, Sigma
 
@@ -267,7 +267,7 @@ class Study(QtCore.QObject):
         # TODO: make it possible to blend multiple directories
         self._documents_matrix = None
         docs, projections, Sigma = self.get_eigenstuff()
-        spectral = divisi2.reconstruct_activation(projections, Sigma)
+        spectral = divisi2.reconstruct_activation(projections, Sigma, post_normalize=False)
         self._step('Calculating stats...')
         stats = self.compute_stats(docs, spectral)
         

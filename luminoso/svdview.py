@@ -326,7 +326,7 @@ class PointLayer(Layer):
         """
         self.sizes = np.sum(self.luminoso.array ** 2, axis=-1) ** 0.25
         self.sizes /= (np.sum(self.sizes) / len(self.sizes))
-        self.sizes *= self.luminoso.scale / 20000
+        self.sizes *= self.luminoso.scale / 10000
 
 class LabelLayer(Layer):
     """
@@ -736,7 +736,7 @@ class SVDViewer(QWidget):
     def components_to_colors(self, coords):
         while coords.shape[1] < 5:
             coords = np.concatenate([coords, -coords, coords], axis=1)
-        return np.clip(np.int32(coords[...,2:5]*128/self.scale + 128), 25, 230)
+        return np.clip(np.int32(coords[...,2:5]*64/self.scale + 128), 25, 230)
     
     def update_screenpts(self):
         self.screenpts = self.components_to_screen(self.array)
