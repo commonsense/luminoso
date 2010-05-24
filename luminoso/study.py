@@ -383,12 +383,6 @@ class StudyDirectory(QtCore.QObject):
     def save_settings(self):
         write_json_to_file(self.settings, self.get_settings_file())
     
-    def load_cache(self):
-        self._load_blend()
-        self._load_projections()
-        self._load_svd()
-        self._load_stats()
-
     def _step(self, msg):
         logger.info(msg)
         self.emit(QtCore.SIGNAL('step(QString)'), msg)
