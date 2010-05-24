@@ -20,7 +20,7 @@ logger = logging.getLogger('luminoso')
 
 from standalone_nlp.lang_en import nltools as en_nl
 from csc import divisi2
-from csc.divisi2.blending import blend
+from csc.divisi2.blending import blend, blend_svd
 from csc.divisi2.ordered_set import OrderedSet
 
 from luminoso.whereami import package_dir
@@ -185,7 +185,7 @@ class Study(QtCore.QObject):
                         entries.append( (value1*value2, concept2, concept1) )
         return divisi2.SparseMatrix.square_from_named_entries(entries)
 
-    def get_assoc_blend(self):
+    def get_assoc_blend_svd(self):
         other_matrices = []
         doc_matrix = self.get_documents_assoc()
         self._step('Blending...')
@@ -198,18 +198,20 @@ class Study(QtCore.QObject):
                 other_matrices.append(matrix)
 
         if doc_matrix is None:
-            theblend = blend(other_matrices)
+            blend_entries = other_matrices
             study_concepts = set(theblend.row_labels)
         else:
-            theblend = blend([doc_matrix] + other_matrices)
+            blend_entries = [doc_matrix] + other_matrices
             study_concepts = set(doc_matrix.row_labels)
-        return theblend, study_concepts
+        blendsvd = blend_svd([mat.normalize_all() for mat in blend_entries],
+                             k=self.num_axes)
+        return blendsvd, study_concepts
 
     def get_eigenstuff(self):
         self._step('Finding eigenvectors...')
         document_matrix = self.get_documents_matrix()
-        theblend, study_concepts = self.get_assoc_blend()
-        U, Sigma, V = theblend.normalize_all().svd(k=self.num_axes)
+        blendsvd, study_concepts = self.get_assoc_blend_svd()
+        U, Sigma, V = blendsvd
         indices = [U.row_index(concept) for concept in study_concepts]
         reduced_U = U[indices]
         doc_rows = divisi2.aligned_matrix_multiply(document_matrix.normalize_rows(), reduced_U)
