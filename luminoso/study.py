@@ -2,6 +2,12 @@
 This class provides the model to SVDView's view, calculating a blend of all
 the components of a study that it finds in the filesystem.
 """
+import sys, os
+if __name__ == '__main__':
+    # prepare for other imports
+    sys.path.extend([os.path.join(os.path.dirname(sys.argv[0]), "lib"),
+                     os.path.dirname(sys.argv[0])])
+
 from PyQt4 import QtCore
 import os, codecs, time
 import cPickle as pickle
@@ -383,6 +389,11 @@ class StudyDirectory(QtCore.QObject):
         write_json_to_file({}, dest_path('settings.json'))
 
         return StudyDirectory(destdir)
+    
+    def _ensure_dir_exists(self, targetdir):
+        path = os.path.join(self.dir, targetdir)
+        if not os.path.exists(path):
+            os.mkdir(path)
 
     def load_settings(self):
         try:
@@ -405,15 +416,19 @@ class StudyDirectory(QtCore.QObject):
         return self.study_path("settings.json")
 
     def get_canonical_dir(self):
+        self._ensure_dir_exists("Canonical")
         return self.study_path("Canonical")
 
     def get_documents_dir(self):
+        self._ensure_dir_exists("Documents")
         return self.study_path("Documents")
 
     def get_matrices_dir(self):
+        self._ensure_dir_exists("Matrices")
         return self.study_path("Matrices")
         
     def get_results_dir(self):
+        self._ensure_dir_exists("Results")
         return self.study_path("Results")
     
     def listdir(self, dir, text_only, full_names):
@@ -425,6 +440,7 @@ class StudyDirectory(QtCore.QObject):
             return files
 
     def get_matrices_files(self):
+        self._ensure_dir_exists("Matrices")
         return self.listdir('Matrices', text_only=False, full_names=True)
 
     def get_documents(self):
