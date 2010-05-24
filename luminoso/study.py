@@ -126,7 +126,9 @@ class Study(QtCore.QObject):
         self.emit(QtCore.SIGNAL('step(QString)'), msg)
 
     def get_contents_hash(self):
-        def sha1(txt): return hashlib.sha1(txt).hexdigest()
+        def sha1(txt):
+            if isinstance(txt, unicode): txt = txt.encode('utf-8')
+            return hashlib.sha1(txt).hexdigest()
 
         docs = dict((doc.name, (isinstance(doc, CanonicalDocument),
                                 sha1(doc.text)))
@@ -169,6 +171,11 @@ class Study(QtCore.QObject):
         if self.num_documents == 0: return None
         entries = []
         for doc in self.study_documents:
+            concepts = doc.extract_concepts_with_negation()[:100]
+            for concept1, value1 in concepts:
+                for concept2, value2 in concepts:
+                    entries.append( (value1*value2, concept1, concept2) )
+                    entries.append( (value1*value2, concept2, concept1) )
             for sentence in doc.get_sentences():
                 # avoid insane space usage by limiting to 100 words
                 concepts = extract_concepts_from_words(sentence[:100])
@@ -179,9 +186,9 @@ class Study(QtCore.QObject):
         return divisi2.SparseMatrix.square_from_named_entries(entries)
 
     def get_assoc_blend(self):
-        self._step('Blending...')
         other_matrices = []
         doc_matrix = self.get_documents_assoc()
+        self._step('Blending...')
         for name, matrix in self.other_matrices.items():
             # use association matrices only
             # (unless we figure out how to do both kinds of blending)
@@ -352,7 +359,10 @@ class StudyResults(QtCore.QObject):
                 return pickle.load(f)
 
         # Either this will all fail or all succeed.
-        input_hash = load_pickle('input_hash.pickle')
+        try:
+            input_hash = load_pickle('input_hash.pickle')
+        except IOError:
+            raise OutdatedAnalysisError()
         cur_hash = for_study.get_contents_hash()
         if input_hash != cur_hash:
             raise OutdatedAnalysisError()
@@ -468,7 +478,7 @@ class StudyDirectory(QtCore.QObject):
                      documents=self.get_documents(),
                      canonical=self.get_canonical_documents(),
                      other_matrices=self.get_matrices(),
-                     num_axes = self.settings['axes'])
+                     num_axes = self.settings.get('axes',20))
 
     def analyze(self):
         study = self.get_study()

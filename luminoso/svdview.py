@@ -736,7 +736,7 @@ class SVDViewer(QWidget):
     def components_to_colors(self, coords):
         while coords.shape[1] < 5:
             coords = np.concatenate([coords, -coords, coords], axis=1)
-        return np.clip(np.int32(coords[...,2:5]*64/self.scale + 128), 25, 230)
+        return np.clip(np.int32(coords[...,2:5]*8/self.scale + 160), 25, 230)
     
     def update_screenpts(self):
         self.screenpts = self.components_to_screen(self.array)
