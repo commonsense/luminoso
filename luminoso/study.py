@@ -234,8 +234,7 @@ class Study(QtCore.QObject):
             all_means = np.mean(all_assoc, axis=1)
             all_stdev = np.std(all_assoc, axis=1)
             all_stderr = all_stdev / np.sqrt(len(doc_indices))
-            centrality = divisi2.DenseVector(all_means / all_stderr,
-                                             spectral.row_labels)
+            centrality = divisi2.DenseVector((all_means - reference_mean) / all_stderr, spectral.row_labels)
             core = centrality.top_items(50)
             core = [c[0] for c in core
                     if c[0] in concept_sums.labels
