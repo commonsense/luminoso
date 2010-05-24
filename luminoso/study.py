@@ -111,7 +111,7 @@ class Study(QtCore.QObject):
     '''
     A Study is a collection of documents and other matrices that can be analyzed.
     '''
-    def __init__(self, name, documents, canonical, other_matrices):
+    def __init__(self, name, documents, canonical, other_matrices, num_axes=20):
         QtCore.QObject.__init__(self)
         self.name = name
         self.study_documents = documents
@@ -119,7 +119,7 @@ class Study(QtCore.QObject):
         # self.documents is now a property
         self._documents_matrix = None
         self.other_matrices = other_matrices
-        self.num_axes = 20
+        self.num_axes = num_axes
         
     def _step(self, msg):
         logger.info(msg)
@@ -261,6 +261,12 @@ class Study(QtCore.QObject):
             'core': core,
             'timestamp': list(time.localtime())
         }
+    
+    def get_existing_analysis(self):
+        try:
+            return StudyResults.load(self.study_path('Results'), self)
+        else:
+            return None
 
     def analyze(self):
         # TODO: make it possible to blend multiple directories
@@ -281,6 +287,7 @@ class StudyResults(QtCore.QObject):
         self.spectral = spectral
         self.projections = projections
         self.stats = stats
+        self.canonical_filenames = [doc.name for doc in study.canonical]
 
     def write_coords_as_csv(self, filename):
         # FIXME: not divisi2 ready
@@ -305,6 +312,7 @@ class StudyResults(QtCore.QObject):
         self.info = render_info_page(self)
         with open(filename, 'w') as out:
             out.write(self.info)
+        return self.info
 
     def get_consistency(self):
         return self.stats['consistency']
@@ -314,7 +322,7 @@ class StudyResults(QtCore.QObject):
 
     def get_info(self):
         if self.info is not None: return self.info
-        else: return default_info_page(self)
+        else: return default_info_page(self.study)
 
     def save(self, dir):
         def tgt(name): return os.path.join(dir, name)
@@ -462,7 +470,8 @@ class StudyDirectory(QtCore.QObject):
         return Study(name=self.dir.split(os.path.sep)[-1],
                      documents=self.get_documents(),
                      canonical=self.get_canonical_documents(),
-                     other_matrices=self.get_matrices())
+                     other_matrices=self.get_matrices()
+                     num_axes = self.settings['axes'])
 
     def analyze(self):
         study = self.get_study()

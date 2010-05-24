@@ -18,7 +18,7 @@ logger = logging.getLogger('luminoso')
 
 logger.setLevel(logging.INFO)
 
-VERSION = "1.0.2"
+VERSION = "1.2.0"
 DEFAULT_MESSAGE = """
 <h2>Luminoso %(VERSION)s</h2>
 <p>Choose "New Study" or "Open Study" to begin.</p>
@@ -177,16 +177,17 @@ class MainWindow(QtGui.QMainWindow):
 
         with progress_reporter(self, 'Loading study %s' % dir, 7) as progress:
             progress.set_text('Loading.')
-            self.study = LuminosoStudy(dir)
+            self.study = self.study_dir.get_study()
             self.connect(self.study, QtCore.SIGNAL('step(QString)'), progress.tick)
-            self.study.load_pickle_cache()
-            progress.tick('Updating View.')
-            self.update_svdview()
-            progress.tick('Updating Options.')
+            progress.set_text('Loading analysis.')
+            results = self.study.get_existing_analysis()
+            progress.tick('Updating view.')
+            self.update_svdview(results)
+            progress.tick('Updating options.')
             self.update_options()
             self.disconnect(self.study, QtCore.SIGNAL('step(QString)'), progress.tick)
 
-        self.show_info()
+        self.show_info(results)
         self.study_loaded() # TODO: Make it a slot.
 
     def study_loaded(self, loaded=True):
@@ -225,22 +226,21 @@ class MainWindow(QtGui.QMainWindow):
         """
         return self.ui.svdview_panel.viewer
 
-    def update_svdview(self):
+    def update_svdview(self, results):
         """
         Let the SVDView component know that it should load new data.
         """
-        blend = self.study.blend
-        proj = self.study.projections
-        canon = self.study.canonical_docs
-
-        if blend is not None and proj is not None:
-            self.ui.svdview_panel.activate(blend, proj, canon)
-            self.ui.search_box.setCompleter(QtGui.QCompleter(self.get_svdview().labels))
-        else:
+        if results is None:
             self.ui.svdview_panel.deactivate()
+        else:
+            self.ui.svdview_panel.activate(results.docs, results.projections,
+                                           results.canonical_filenames)
     
-    def show_info(self):
-        self.ui.show_info(self.study.get_info())
+    def show_info(self, results):
+        if results is not None:
+            self.ui.show_info(results.get_info())
+        else:
+            self.ui.show_info("Click <b>Analyze</b> to analyze this study.")
 
     def analyze(self):
         """
@@ -255,11 +255,11 @@ class MainWindow(QtGui.QMainWindow):
         
         with progress_reporter(self, 'Analyzing...', 8) as progress:
             self.connect(self.study, QtCore.SIGNAL('step(QString)'), progress.tick)
-            self.study.analyze()
+            results = self.study.analyze()
             logger.info('Analysis finished.')
             progress.tick('Updating view')
-            self.update_svdview()
-            self.show_info()
+            self.update_svdview(results)
+            self.show_info(results)
             self.disconnect(self.study, QtCore.SIGNAL('step(QString)'), progress.tick)
 
     def set_study_dir(self, dir):
@@ -269,6 +269,8 @@ class MainWindow(QtGui.QMainWindow):
         self.ui.tree_view.hideColumn(1)
         self.ui.tree_view.hideColumn(2)
         self.ui.tree_view.hideColumn(3)
+
+        self.study_dir = LuminosoStudy(dir)
         
         # Expand the trees that should be initially visible
         self.ui.tree_view.expand(self.dir_model.index(self.dir_model.rootPath()+'/Canonical'))

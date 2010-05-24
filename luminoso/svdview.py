@@ -909,14 +909,14 @@ class SVDViewPanel(QWidget):
         self.connect(self.y_chooser, SIGNAL("currentIndexChanged(QString)"), self.set_y_from_string)
     
         self.connect(self.x_chooser, SIGNAL("activate(QString)"), self.set_x_from_string)
-    def activate(self, blend, svd, canonical):
+    
+    def activate(self, docs, projections, canonical):
         self.deactivate()
-        self.viewer = SVDViewer.make_svdview(blend, svd, canonical)
+        self.viewer = SVDViewer.make_svdview(docs, projections, canonical)
         self.layout.addWidget(self.viewer, 0, 0, 1, 7)
         self.setup_choosers(canonical)
         self.connect(self.viewer.projection, SIGNAL('rotated()'), self.update_choosers)
         self.connect(self.viewer, SIGNAL('svdSelectEvent()'), self.viewer_selected)
-
     
     def viewer_selected(self):
         self.emit(SIGNAL('svdSelectEvent()'))
