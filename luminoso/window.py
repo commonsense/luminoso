@@ -2,7 +2,7 @@ from __future__ import with_statement
 from PyQt4 import QtCore, QtGui
 from PyQt4.QtCore import Qt
 
-from luminoso.study import LuminosoStudy
+from luminoso.study import StudyDirectory, Study
 from luminoso.ui import LuminosoUI
 from luminoso.batch import progress_reporter
 
@@ -122,7 +122,7 @@ class MainWindow(QtGui.QMainWindow):
 
     def set_num_axes(self, axes):
         if self.study is None: return
-        else: self.study.set_num_axes(axes)
+        else: self.study_dir.set_num_axes(axes)
 
     def add_action(self, menu, name, func, shortcut=None, toolbar_icon=None):
         """
@@ -160,7 +160,7 @@ class MainWindow(QtGui.QMainWindow):
     def new_study_dialog(self):
         dirname = QtGui.QFileDialog.getSaveFileName(self, "Choose where to save this study", package_dir)
         if dirname:
-            study = LuminosoStudy.make_new(unicode(dirname))
+            study = StudyDirectory.make_new(unicode(dirname))
             self.load_study(unicode(dirname))
 
     def load_study_dialog(self):
@@ -180,7 +180,7 @@ class MainWindow(QtGui.QMainWindow):
             self.study = self.study_dir.get_study()
             self.connect(self.study, QtCore.SIGNAL('step(QString)'), progress.tick)
             progress.set_text('Loading analysis.')
-            results = self.study.get_existing_analysis()
+            results = self.study_dir.get_existing_analysis()
             progress.tick('Updating view.')
             self.update_svdview(results)
             progress.tick('Updating options.')
@@ -216,7 +216,7 @@ class MainWindow(QtGui.QMainWindow):
                 print "OS not supported"
     
     def update_options(self):
-        axes = self.study.settings.get('axes')
+        axes = self.study_dir.settings.get('axes')
         if axes is not None:
             self.ui.set_num_axes(axes)
     
@@ -255,7 +255,7 @@ class MainWindow(QtGui.QMainWindow):
         
         with progress_reporter(self, 'Analyzing...', 8) as progress:
             self.connect(self.study, QtCore.SIGNAL('step(QString)'), progress.tick)
-            results = self.study.analyze()
+            results = self.study_dir.analyze()
             logger.info('Analysis finished.')
             progress.tick('Updating view')
             self.update_svdview(results)
@@ -270,7 +270,7 @@ class MainWindow(QtGui.QMainWindow):
         self.ui.tree_view.hideColumn(2)
         self.ui.tree_view.hideColumn(3)
 
-        self.study_dir = LuminosoStudy(dir)
+        self.study_dir = StudyDirectory(dir)
         
         # Expand the trees that should be initially visible
         self.ui.tree_view.expand(self.dir_model.index(self.dir_model.rootPath()+'/Canonical'))

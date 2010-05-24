@@ -67,7 +67,7 @@ class Document(object):
                     current_sentence = []
             else:
                 current_sentence.append(word)
-        sentences.append(' '.join(current_sentence))
+        sentences.append(current_sentence)
         return sentences
 
 class CanonicalDocument(Document):
@@ -131,9 +131,10 @@ class Study(QtCore.QObject):
         docs = dict((doc.name, (isinstance(doc, CanonicalDocument),
                                 sha1(doc.text)))
                     for doc in self.documents)
+        matrices = tuple(sorted(self.other_matrices.keys()))
 
-        matrices = dict((name, hash(mat)) for name, mat in self.other_matrices.items())
         # TODO: make sure matrices have a meaningful `hash`.
+        #matrices = dict((name, hash(mat)) for name, mat in self.other_matrices.items())
         return dict(docs=docs, matrices=matrices)
 
     @property
@@ -262,12 +263,6 @@ class Study(QtCore.QObject):
             'timestamp': list(time.localtime())
         }
     
-    def get_existing_analysis(self):
-        try:
-            return StudyResults.load(self.study_path('Results'), self)
-        else:
-            return None
-
     def analyze(self):
         # TODO: make it possible to blend multiple directories
         self._documents_matrix = None
@@ -276,7 +271,8 @@ class Study(QtCore.QObject):
         self._step('Calculating stats...')
         stats = self.compute_stats(docs, spectral)
         
-        return StudyResults(self, docs, projections, spectral, stats)
+        results = StudyResults(self, docs, spectral.left, spectral, stats)
+        return results
 
 
 class StudyResults(QtCore.QObject):
@@ -287,7 +283,8 @@ class StudyResults(QtCore.QObject):
         self.spectral = spectral
         self.projections = projections
         self.stats = stats
-        self.canonical_filenames = [doc.name for doc in study.canonical]
+        self.canonical_filenames = [doc.name for doc in study.canonical_documents]
+        self.info = None
 
     def write_coords_as_csv(self, filename):
         # FIXME: not divisi2 ready
@@ -470,7 +467,7 @@ class StudyDirectory(QtCore.QObject):
         return Study(name=self.dir.split(os.path.sep)[-1],
                      documents=self.get_documents(),
                      canonical=self.get_canonical_documents(),
-                     other_matrices=self.get_matrices()
+                     other_matrices=self.get_matrices(),
                      num_axes = self.settings['axes'])
 
     def analyze(self):
@@ -478,11 +475,19 @@ class StudyDirectory(QtCore.QObject):
         results = study.analyze()
         self._ensure_dir_exists('Results')
         results.save(self.study_path('Results'))
+        return results
 
     def set_num_axes(self, axes):
         self.settings['axes'] = axes
         self.study.num_axes = axes
         self.save_settings()
+    
+    def get_existing_analysis(self):
+        # FIXME: this loads the study twice, I think
+        try:
+            return StudyResults.load(self.study_path('Results'), self.get_study())
+        except OutdatedAnalysisError:
+            return None
 
 def test():
     study = StudyDirectory('../ThaiFoodStudy')

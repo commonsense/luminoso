@@ -326,7 +326,7 @@ class PointLayer(Layer):
         """
         self.sizes = np.sum(self.luminoso.array ** 2, axis=-1) ** 0.25
         self.sizes /= (np.sum(self.sizes) / len(self.sizes))
-        self.sizes *= self.luminoso.scale / 10000
+        self.sizes *= self.luminoso.scale / 20000
 
 class LabelLayer(Layer):
     """
@@ -474,14 +474,14 @@ class CanonicalLayer(Layer):
         origin = np.zeros((2,))
         origin_pt = Point(*self.luminoso.projection_to_screen(origin))
         #painter.setCompositionMode(QPainter.CompositionMode_Screen)
-        for axis in xrange(self.luminoso.k):
-            projpoint = self.luminoso.projection.matrix[axis]/2
-            x, y = self.luminoso.projection_to_screen(projpoint)
-            target_pt = Point(x, y)
-            painter.setPen(QColor(100, 100, 100))
-            painter.drawLine(Line(origin_pt, target_pt))
-            painter.setPen(QColor(180, 180, 180))
-            painter.drawText(Point(x+2, y+2), str(axis))
+        #for axis in xrange(self.luminoso.k):
+        #    projpoint = self.luminoso.projection.matrix[axis]/2
+        #    x, y = self.luminoso.projection_to_screen(projpoint)
+        #    target_pt = Point(x, y)
+        #    painter.setPen(QColor(100, 100, 100))
+        #    painter.drawLine(Line(origin_pt, target_pt))
+        #    painter.setPen(QColor(180, 180, 180))
+        #    painter.drawText(Point(x+2, y+2), str(axis))
 
         painter.setPen(QColor(200, 200, 0))
         for canon in self.canonical:
@@ -667,14 +667,14 @@ class SVDViewer(QWidget):
         self.add_layer(PanZoomLayer)
     
     def set_default_axes(self):
-        self.set_axis_to_text(0, 'DefaultXAxis')
-        self.set_axis_to_text(1, 'DefaultYAxis')
+        self.set_axis_to_pc(0, 1)
+        self.set_axis_to_pc(1, 2)
     
     def set_default_x_axis(self):
-        self.set_axis_to_text(0, 'DefaultXAxis')
+        self.set_axis_to_pc(0, 1)
 
     def set_default_y_axis(self):
-        self.set_axis_to_text(1, 'DefaultYAxis')
+        self.set_axis_to_pc(1, 2)
 
     def set_axis_to_pc(self, axis, pc):
         """
@@ -734,9 +734,9 @@ class SVDViewer(QWidget):
         return (zoomed * self.screen_size) + self.screen_center
     
     def components_to_colors(self, coords):
-        while coords.shape[1] < 3:
+        while coords.shape[1] < 5:
             coords = np.concatenate([coords, -coords, coords], axis=1)
-        return np.clip(np.int32(coords[...,2:5]*3/self.scale + 128), 25, 230)
+        return np.clip(np.int32(coords[...,2:5]*128/self.scale + 128), 25, 230)
     
     def update_screenpts(self):
         self.screenpts = self.components_to_screen(self.array)
