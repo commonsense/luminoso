@@ -230,7 +230,7 @@ class Study(QtCore.QObject):
                            self.study_documents]
             
             # Compute the association of all study documents with each other
-            reference_assoc = spectral[doc_indices, doc_indices].to_dense()
+            reference_assoc = np.asarray(spectral[doc_indices, doc_indices].to_dense())
             reference_mean = np.mean(reference_assoc)
             reference_stdev = np.std(reference_assoc)
             reference_stderr = reference_stdev / len(doc_indices)
@@ -467,6 +467,7 @@ class StudyDirectory(QtCore.QObject):
     def analyze(self):
         study = self.get_study()
         results = study.analyze()
+        self._ensure_dir_exists('Results')
         results.save(self.study_path('Results'))
 
     def set_num_axes(self, axes):
