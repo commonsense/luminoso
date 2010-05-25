@@ -227,7 +227,7 @@ class Study(QtCore.QObject):
         is. Same general idea as "congruence" from Luminoso 1.0.
         """
 
-        if len(self.study_documents) == 0:
+        if len(self.study_documents) <= 1:
             # consistency and centrality are undefined
             consistency = None
             centrality = None
@@ -238,9 +238,13 @@ class Study(QtCore.QObject):
                            self.study_documents]
             
             # Compute the association of all study documents with each other
-            reference_assoc = np.asarray(spectral[doc_indices, doc_indices].to_dense())
-            reference_mean = np.mean(reference_assoc)
-            reference_stdev = np.std(reference_assoc)
+            assoc_grid = np.asarray(spectral[doc_indices, doc_indices].to_dense())
+            assoc_list = []
+            for i in xrange(1, assoc_grid.shape[0]):
+                assoc_list.extend(assoc_grid[i, :i])
+
+            reference_mean = np.mean(assoc_list)
+            reference_stdev = np.std(assoc_list)
             reference_stderr = reference_stdev / len(doc_indices)
             consistency = reference_mean / reference_stderr
 
