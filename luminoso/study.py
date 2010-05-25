@@ -278,7 +278,7 @@ class Study(QtCore.QObject):
         # TODO: make it possible to blend multiple directories
         self._documents_matrix = None
         docs, projections, Sigma = self.get_eigenstuff()
-        spectral = divisi2.reconstruct_activation(projections, Sigma, post_normalize=False)
+        spectral = divisi2.reconstruct_activation(projections, Sigma, post_normalize=True)
         self._step('Calculating stats...')
         stats = self.compute_stats(docs, spectral)
         
