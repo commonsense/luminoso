@@ -1,1 +1,2 @@
-5star, not 1star
+good, tasty, not bad, not awful,
+5star, 4star, not 2star, not 1star
