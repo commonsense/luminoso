@@ -39,6 +39,7 @@ class MainWindow(QtGui.QMainWindow):
         self.setCentralWidget(self.ui)
 
         self.study = None
+        self.results = None
         self.already_closed = False
 
         self.menus = {}
@@ -98,12 +99,19 @@ class MainWindow(QtGui.QMainWindow):
         label = self.ui.svdview_panel.get_selected_label()
 
         if label is not None:
-            index = self.ui.tree_view.find_filename_index(label)
-            if index is not None:
-                self.ui.tree_view.setSelection(self.ui.tree_view.visualRect(index), self.ui.tree_view.selectionModel().ClearAndSelect)
+            self.selected_label(label)
 
-                text = self.ui.tree_view.get_file_contents_at(index)
-                self.ui.show_document_info(label, text)
+    def selected_label(self, label):
+        index = self.ui.tree_view.find_filename_index(label)
+        if index is not None:
+            self.ui.tree_view.setSelection(self.ui.tree_view.visualRect(index), self.ui.tree_view.selectionModel().ClearAndSelect)
+
+            text = self.ui.tree_view.get_file_contents_at(index)
+            self.ui.show_document_info(label, text)
+        elif self.results is not None:
+            # we might be able to show some information here
+            info = self.results.get_concept_info(label)
+            if info is not None: self.ui.show_info(info)
 
     def toolbar_search(self):
         self.search(self.ui.search_box.text())
@@ -114,7 +122,7 @@ class MainWindow(QtGui.QMainWindow):
     def select_document(self, modelIndex):
         filename = self.ui.tree_view.get_filename_at(modelIndex)
         self.ui.svdview_panel.find_point(filename)
-	if filename == u'NotImplemented': filename = ''
+        if filename == u'NotImplemented': filename = ''
 
         #Changes the text in the info panel
         text = self.ui.tree_view.get_file_contents_at(modelIndex)
@@ -187,6 +195,7 @@ class MainWindow(QtGui.QMainWindow):
             self.update_options()
             self.disconnect(self.study, QtCore.SIGNAL('step(QString)'), progress.tick)
 
+        self.results = results
         self.show_info(results)
         self.study_loaded() # TODO: Make it a slot.
 
@@ -261,6 +270,7 @@ class MainWindow(QtGui.QMainWindow):
             progress.tick('Updating view')
             self.update_svdview(results)
             self.show_info(results)
+            self.results = results
             self.disconnect(self.study, QtCore.SIGNAL('step(QString)'), progress.tick)
 
     def set_study_dir(self, dir):

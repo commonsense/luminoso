@@ -309,7 +309,7 @@ class StudyResults(QtCore.QObject):
         self.magnitudes = magnitudes
         self.stats = stats
         self.canonical_filenames = [doc.name for doc in study.canonical_documents]
-        self.info = None
+        self.info = render_info_page(self)
 
     def write_coords_as_csv(self, filename):
         # FIXME: not divisi2 ready
@@ -345,6 +345,25 @@ class StudyResults(QtCore.QObject):
     def get_info(self):
         if self.info is not None: return self.info
         else: return default_info_page(self.study)
+
+    def get_concept_info(self, concept):
+        if concept not in self.spectral.row_labels: return None
+        related = self.spectral.row_named(concept).top_items(10)
+        related = [x[0] for x in related if not x[0].endswith('.txt')]
+        documents = [x[1] for x in self.docs.col_named(concept).named_entries()]
+
+        related_str = ', '.join(related[:5])
+        documents_str = ', '.join(documents[:10])
+        if len(documents) > 10: documents_str += '...'
+        # TODO: make this a jinja template
+        html = """
+        <h2>%(concept)s</h2>
+        <ul>
+        <li>Related concepts: %(related_str)s</li>
+        <li>From documents: %(documents_str)s</li>
+        </ul>
+        """ % locals()
+        return html
 
     def save(self, dir):
         def tgt(name): return os.path.join(dir, name)
@@ -520,6 +539,7 @@ class StudyDirectory(QtCore.QObject):
         try:
             return StudyResults.load(self.study_path('Results'), self.get_study())
         except OutdatedAnalysisError:
+            print "Skipping outdated analysis."
             return None
 
 def test():
