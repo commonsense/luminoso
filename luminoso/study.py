@@ -274,14 +274,29 @@ class Study(QtCore.QObject):
                     and concept_sums.entry_named(c[0]) >= 2][:10]
 
             c_centrality = {}
+            key_concepts = {}
+            sdoc_indices = [spectral.col_index(sdoc.name)
+                            for sdoc in self.study_documents]
+            doc_occur = np.minimum(1, self._documents_matrix.to_dense())
+            baseline = np.maximum(0.00001, np.sum(np.asarray(doc_occur),
+              axis=0)) / doc_occur.shape[0]
             for doc in self.canonical_documents:
                 c_centrality[doc.name] = centrality.entry_named(doc.name)
+                docvec = np.maximum(0, spectral.row_named(doc.name)[sdoc_indices])
+                docvec /= (0.00001 + np.sum(docvec))
+                keyvec = divisi2.aligned_matrix_multiply(docvec, doc_occur)
+                # FIXME: this is a totally made up heuristic
+                interesting = keyvec - 1.2*baseline
+                key_concepts[doc.name] = []
+                for key, val in interesting.top_items(5):
+                    key_concepts[doc.name].append((key, keyvec.entry_named(key)))
         
         return {
             'num_documents': self.num_documents,
             'num_concepts': spectral.shape[0] - self.num_documents,
             'consistency': consistency,
             'centrality': c_centrality,
+            'key_concepts': key_concepts,
             'core': core,
             'timestamp': list(time.localtime())
         }
