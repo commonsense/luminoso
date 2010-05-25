@@ -289,7 +289,7 @@ class PointLayer(Layer):
     def __init__(self, luminoso, npoints=1000):
         Layer.__init__(self, luminoso)
         self.npoints = npoints
-        self.calculate_magnitudes()
+        self.sizes = self.calculate_magnitudes()
 
     def draw(self, painter):
         painter.setPen(Qt.NoPen)
@@ -324,9 +324,13 @@ class PointLayer(Layer):
         """
         Assign every point a size according to its distance from the origin.
         """
-        self.sizes = np.sum(self.luminoso.array ** 2, axis=-1) ** 0.25
-        self.sizes /= (np.sum(self.sizes) / len(self.sizes))
-        self.sizes *= self.luminoso.scale / 10000
+        if self.luminoso.magnitudes is not None:
+            sizes = np.sqrt(self.luminoso.magnitudes)
+        else:
+            sizes = np.sum(self.luminoso.array ** 2, axis=-1) ** 0.25
+        sizes /= (np.sum(sizes) / len(sizes))
+        sizes *= self.luminoso.scale / 40000
+        return sizes
 
 class LabelLayer(Layer):
     """
@@ -337,6 +341,7 @@ class LabelLayer(Layer):
         self.nlabels = nlabels
         self.npoints = npoints
         self.whichlabels = quadrange(self.luminoso.npoints, npoints)
+        self.magnitudes = np.asarray(self.luminoso.magnitudes)
         self.update_order()
 
     def draw(self, painter):
@@ -385,7 +390,7 @@ class LabelLayer(Layer):
         
     def update_order(self):
         self.distances = self.luminoso.distances_from_mouse(self.luminoso.array)
-        self.order = np.argsort(self.distances)
+        self.order = np.argsort(self.distances / self.magnitudes)
 
 class SelectionLayer(Layer):
     """
@@ -503,34 +508,47 @@ class LinkLayer(Layer):
     def selectEvent(self, selected_index):
         selectkey = self.luminoso.labels[selected_index]
         connections = []
+        anti_connections = []
         if selectkey in self.matrix.row_labels:
             for (value, other) in self.matrix.row_named(selectkey).named_entries():
                 try:
                     index = self.luminoso.labels.index(other)
-                    connections.append(index)
+                    if value > 0:
+                        connections.append(index)
+                    elif value < 0:
+                        anti_connections.append(index)
                 except KeyError:
                     pass
         if selectkey in self.matrix.col_labels:
             for (value, other) in self.matrix.col_named(selectkey).named_entries():
                 try:
                     index = self.luminoso.labels.index(other)
-                    connections.append(index)
+                    if value > 0:
+                        connections.append(index)
+                    elif value < 0:
+                        anti_connections.append(index)
                 except KeyError:
                     pass
         
         self.source = selected_index
         self.connections = connections
+        self.anti_connections = anti_connections
     
     def draw(self, painter):
         if self.source:
             source_pt = Point(*self.luminoso.components_to_screen(self.luminoso.array[self.source]))
+            
             target_pts = [Point(*p) for p in self.luminoso.components_to_screen(self.luminoso.array[self.connections])]
             lines = [Line(source_pt, target_pt) for target_pt in target_pts]
 
-            painter.setPen(QColor(0, 100, 200, 120))
-            #painter.setCompositionMode(QPainter.CompositionMode_Screen)
+            painter.setPen(QColor(0, 100, 200, 160))
             painter.drawLines(lines)
-            #painter.setCompositionMode(QPainter.CompositionMode_SourceOver)
+            
+            target_pts = [Point(*p) for p in self.luminoso.components_to_screen(self.luminoso.array[self.anti_connections])]
+            lines = [Line(source_pt, target_pt) for target_pt in target_pts]
+
+            painter.setPen(QColor(200, 0, 0, 160))
+            painter.drawLines(lines)
         
 class SVDViewer(QWidget):
     def __init__(self, array, labels, **options):
@@ -542,6 +560,7 @@ class SVDViewer(QWidget):
         self.height = self.size().height()
 
         self.labels = labels
+        self.magnitudes = None  # can be assigned by external information
         self.array = np.asarray(array)
         self.orig_array = self.array.copy()
 
@@ -624,15 +643,16 @@ class SVDViewer(QWidget):
     
     def reset_view(self):
         self.screen_center = np.array([0., 0.])
-        self.screen_size = np.array([self.scale/2, self.scale/2])
+        self.screen_size = np.array([self.scale/10, self.scale/10])
         self.projection.reset_projection()
         self.set_default_axes()
         self.update_screenpts()
         self.update()
 
     @staticmethod
-    def make_svdview(matrix, svdmatrix, canonical=None):
+    def make_svdview(matrix, svdmatrix, magnitudes=None, canonical=None):
         widget = SVDViewer(svdmatrix, svdmatrix.row_labels)
+        widget.magnitudes = magnitudes
         widget.setup_standard_layers()
         widget.set_default_axes()
         if canonical is None: canonical = []
@@ -736,7 +756,7 @@ class SVDViewer(QWidget):
     def components_to_colors(self, coords):
         while coords.shape[1] < 5:
             coords = np.concatenate([coords, -coords, coords], axis=1)
-        return np.clip(np.int32(coords[...,2:5]*80/self.scale + 160), 25, 230)
+        return np.clip(np.int32(coords[...,2:5]*80/self.scale + 160), 50, 230)
     
     def update_screenpts(self):
         self.screenpts = self.components_to_screen(self.array)
@@ -910,9 +930,9 @@ class SVDViewPanel(QWidget):
     
         self.connect(self.x_chooser, SIGNAL("activate(QString)"), self.set_x_from_string)
     
-    def activate(self, docs, projections, canonical):
+    def activate(self, docs, projections, magnitudes, canonical):
         self.deactivate()
-        self.viewer = SVDViewer.make_svdview(docs, projections, canonical)
+        self.viewer = SVDViewer.make_svdview(docs, projections, magnitudes, canonical)
         self.layout.addWidget(self.viewer, 0, 0, 1, 7)
         self.setup_choosers(canonical)
         self.connect(self.viewer.projection, SIGNAL('rotated()'), self.update_choosers)

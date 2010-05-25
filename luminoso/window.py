@@ -234,6 +234,7 @@ class MainWindow(QtGui.QMainWindow):
             self.ui.svdview_panel.deactivate()
         else:
             self.ui.svdview_panel.activate(results.docs, results.projections,
+                                           results.magnitudes,
                                            results.canonical_filenames)
     
     def show_info(self, results):

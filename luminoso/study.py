@@ -161,7 +161,7 @@ class Study(QtCore.QObject):
         entries = []
         for doc in self.documents:
             for concept, value in doc.extract_concepts_with_negation():
-                if not en_nl.is_blacklisted(concept):
+                if (concept not in PUNCTUATION) and (not en_nl.is_blacklisted(concept)):
                     entries.append((value, doc.name, concept))
         self._documents_matrix = divisi2.make_sparse(entries)
         return self._documents_matrix
@@ -169,21 +169,33 @@ class Study(QtCore.QObject):
     def get_documents_assoc(self):
         self._step('Finding associated concepts...')
         if self.num_documents == 0: return None
+        def entry_count(vec):
+            return np.sum(np.abs(vec))
+        docs = self.get_documents_matrix()
+        concept_counts = docs.col_op(entry_count)
+        valid_concepts = set()
+        for concept, count in concept_counts.to_sparse().named_items():
+            if ' ' not in concept or count >= 2: valid_concepts.add(concept)
+
         entries = []
         for doc in self.study_documents:
             concepts = doc.extract_concepts_with_negation()[:100]
             for concept1, value1 in concepts:
-                for concept2, value2 in concepts:
-                    entries.append( (value1*value2, concept1, concept2) )
-                    entries.append( (value1*value2, concept2, concept1) )
+                if concept1 in valid_concepts:
+                    for concept2, value2 in concepts:
+                        if concept2 in valid_concepts and concept1 != concept2:
+                            entries.append( (value1*value2/2, concept1, concept2) )
+                            entries.append( (value1*value2/2, concept2, concept1) )
             for sentence in doc.get_sentences():
                 # avoid insane space usage by limiting to 100 words
                 concepts = extract_concepts_from_words(sentence[:100])
                 for concept1, value1 in concepts:
-                    for concept2, value2 in concepts:
-                        entries.append( (value1*value2, concept1, concept2) )
-                        entries.append( (value1*value2, concept2, concept1) )
-        return divisi2.SparseMatrix.square_from_named_entries(entries)
+                    if concept1 in valid_concepts:
+                        for concept2, value2 in concepts:
+                            if concept2 in valid_concepts and concept1 != concept2:
+                                entries.append( (value1*value2, concept1, concept2) )
+                                entries.append( (value1*value2, concept2, concept1) )
+        return divisi2.SparseMatrix.square_from_named_entries(entries).squish()
 
     def get_assoc_blend(self):
         other_matrices = []
@@ -278,21 +290,23 @@ class Study(QtCore.QObject):
         # TODO: make it possible to blend multiple directories
         self._documents_matrix = None
         docs, projections, Sigma = self.get_eigenstuff()
+        magnitudes = np.sqrt(np.sum(np.asarray(projections*projections), axis=1))
         spectral = divisi2.reconstruct_activation(projections, Sigma, post_normalize=True)
         self._step('Calculating stats...')
         stats = self.compute_stats(docs, spectral)
         
-        results = StudyResults(self, docs, spectral.left, spectral, stats)
+        results = StudyResults(self, docs, spectral.left, spectral, magnitudes, stats)
         return results
 
 
 class StudyResults(QtCore.QObject):
-    def __init__(self, study, docs, projections, spectral, stats):
+    def __init__(self, study, docs, projections, spectral, magnitudes, stats):
         QtCore.QObject.__init__(self)
         self.study = study
         self.docs = docs
         self.spectral = spectral
         self.projections = projections
+        self.magnitudes = magnitudes
         self.stats = stats
         self.canonical_filenames = [doc.name for doc in study.canonical_documents]
         self.info = None
@@ -347,6 +361,9 @@ class StudyResults(QtCore.QObject):
         self.study._step('Saving projections...')
         save_pickle('projections.dmat', self.projections)
 
+        self.study._step('Saving magnitudes...')
+        save_pickle('magnitudes.dvec', self.magnitudes)
+
         self.study._step('Writing reports...')
         # Save stats
         write_json_to_file(self.stats, tgt("stats.json"))
@@ -377,12 +394,14 @@ class StudyResults(QtCore.QObject):
         spectral = load_pickle("spectral.rmat")
         for_study._step('Loading projections...')
         projections = load_pickle("projections.dmat")
+        for_study._step('Loading magnitudes...')
+        magnitudes = load_pickle("magnitudes.dvec")
 
         # Load stats
         for_study._step('Loading stats...')
         stats = load_json_from_file(tgt("stats.json"))
 
-        return cls(for_study, docs, projections, spectral, stats)
+        return cls(for_study, docs, projections, spectral, magnitudes, stats)
 
 class StudyDirectory(QtCore.QObject):
     '''
