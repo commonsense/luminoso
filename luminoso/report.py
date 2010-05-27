@@ -6,10 +6,14 @@ import time
 
 def render_info_page(results):
     study_name = results.study.name
-    num_documents = results.stats['num_documents']
-    num_concepts = results.stats['num_concepts']
-    consistency = results.stats['consistency']
-    centrality = results.stats['centrality']
+    try:
+        num_documents = results.stats['num_documents']
+        num_concepts = results.stats['num_concepts']
+        consistency = results.stats['consistency']
+        centrality = results.stats['centrality']
+        correlation = results.stats['correlation']
+    except KeyError:
+        return ""
     key_concepts = {}
     for key, values in results.stats['key_concepts'].items():
         kstr = ["%s (%d%%)" % (concept.encode('utf-8'), value*100)
@@ -45,6 +49,7 @@ template = Template("""
     {% for docname in canonical %}
       <dt><b>{{docname}}</b></dt>
       <dd>Centrality: {{centrality[docname]|round(2)}}</dd>
+      <dd>Correlation: {{correlation[docname]|round(2)}}</dd>
       <dd>Interesting concepts: {{key_concepts[docname]|join(', ')}}</dd>
     {% endfor %}
   </dl>

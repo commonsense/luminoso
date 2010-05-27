@@ -86,7 +86,7 @@ def extract_concepts_from_words(words):
     negative_words = []
     positive = True
     for word in words:
-        if word in NEGATION:
+        if word.lower() in NEGATION:
             positive = False
         else:
             if positive:
@@ -293,6 +293,7 @@ class Study(QtCore.QObject):
             # consistency and centrality are undefined
             consistency = None
             centrality = None
+            correlation = None
             core = None
         else:
             concept_sums = docs.col_op(np.sum)
@@ -319,13 +320,16 @@ class Study(QtCore.QObject):
             all_stdev = np.std(all_assoc, axis=1)
             all_stderr = all_stdev / np.sqrt(len(doc_indices))
             centrality = divisi2.DenseVector((all_means - reference_mean) /
-            ztest_stderr, spectral.row_labels)
+              ztest_stderr, spectral.row_labels)
+            correlation = divisi2.DenseVector(all_means / ztest_stderr,
+              spectral.row_labels)
             core = centrality.top_items(100)
             core = [c[0] for c in core
                     if c[0] in concept_sums.labels
                     and concept_sums.entry_named(c[0]) >= 2][:10]
 
             c_centrality = {}
+            c_correlation = {}
             key_concepts = {}
             sdoc_indices = [spectral.col_index(sdoc.name)
                             for sdoc in self.study_documents
@@ -335,10 +339,10 @@ class Study(QtCore.QObject):
               axis=0)) / doc_occur.shape[0]
             for doc in self.canonical_documents:
                 c_centrality[doc.name] = centrality.entry_named(doc.name)
+                c_correlation[doc.name] = correlation.entry_named(doc.name)
                 docvec = np.maximum(0, spectral.row_named(doc.name)[sdoc_indices])
                 docvec /= (0.00001 + np.sum(docvec))
                 keyvec = divisi2.aligned_matrix_multiply(docvec, doc_occur)
-                # FIXME: this is a totally made up heuristic
                 interesting = keyvec / baseline
                 key_concepts[doc.name] = []
                 for key, val in interesting.top_items(5):
@@ -349,6 +353,7 @@ class Study(QtCore.QObject):
             'num_concepts': spectral.shape[0] - self.num_documents,
             'consistency': consistency,
             'centrality': c_centrality,
+            'correlation': c_correlation,
             'key_concepts': key_concepts,
             'core': core,
             'timestamp': list(time.localtime())

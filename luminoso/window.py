@@ -197,7 +197,7 @@ class MainWindow(QtGui.QMainWindow):
             self.disconnect(self.study, QtCore.SIGNAL('step(QString)'), progress.tick)
 
         self.results = results
-        self.show_info(results)
+        self.show_info()
         self.study_loaded() # TODO: Make it a slot.
 
     def study_loaded(self, loaded=True):
@@ -247,9 +247,9 @@ class MainWindow(QtGui.QMainWindow):
                                            results.magnitudes,
                                            results.canonical_filenames)
     
-    def show_info(self, results):
-        if results is not None:
-            self.ui.show_info(results.get_info())
+    def show_info(self):
+        if self.results is not None:
+            self.ui.show_info(self.results.get_info())
         else:
             self.ui.show_info("Click <b>Analyze</b> to analyze this study.")
 
@@ -270,8 +270,8 @@ class MainWindow(QtGui.QMainWindow):
             logger.info('Analysis finished.')
             progress.tick('Updating view')
             self.update_svdview(results)
-            self.show_info(results)
             self.results = results
+            self.show_info()
             self.disconnect(self.study, QtCore.SIGNAL('step(QString)'), progress.tick)
 
     def set_study_dir(self, dir):
