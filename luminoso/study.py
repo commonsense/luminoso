@@ -106,6 +106,9 @@ def load_json_from_file(file):
 def write_json_to_file(data, file):
     with open(file, 'w') as f:
         json.dump(data, f)
+        
+def entry_count(vec):
+    return np.sum(np.abs(vec))
 
 class Study(QtCore.QObject):
     '''
@@ -169,8 +172,6 @@ class Study(QtCore.QObject):
     def get_documents_assoc(self):
         self._step('Finding associated concepts...')
         if self.num_documents == 0: return None
-        def entry_count(vec):
-            return np.sum(np.abs(vec))
         docs = self.get_documents_matrix()
         concept_counts = docs.col_op(entry_count)
         valid_concepts = set()
@@ -196,6 +197,48 @@ class Study(QtCore.QObject):
                                 entries.append( (value1*value2, concept1, concept2) )
                                 entries.append( (value1*value2, concept2, concept1) )
         return divisi2.SparseMatrix.square_from_named_entries(entries).squish()
+    
+    def get_blend(self):
+        if self.is_associative():
+            return self.get_assoc_blend()
+        else:
+            return self.get_analogy_blend()
+    
+    def is_associative(self):
+        return any(name.endswith('.assoc.smat') for name in
+                   self.other_matrices)
+
+    def get_analogy_blend(self):
+        other_matrices = [matrix for name, matrix in
+        self.other_matrices.items() if name.endswith('.smat')]
+        other_matrices = self.other_matrices.values()
+        
+        # find concepts used at least twice
+        docs = self.get_documents_matrix()
+        concept_counts = docs.col_op(entry_count)
+        valid_concepts = set()
+        for concept, count in concept_counts.to_sparse().named_items():
+            if ' ' not in concept or count >= 2: valid_concepts.add(concept)
+        
+        # extract relevant concepts from the doc matrix;
+        # transpose it so it's concepts vs. documents
+        orig_doc_matrix = self.get_documents_matrix()
+        #sdoc_indices = [orig_doc_matrix.row_index(sdoc.name)
+        #                for sdoc in self.study_documents]
+        concept_indices = [orig_doc_matrix.col_index(c)
+                           for c in valid_concepts]
+
+        # NOTE: canonical documents can affect the stats this way.
+        # Is there a clean way to fix this?
+
+        doc_matrix = orig_doc_matrix[:,concept_indices].T.squish()
+        if doc_matrix is None:
+            theblend = blend(other_matrices)
+            study_concepts = set(theblend.row_labels)
+        else:
+            theblend = blend([doc_matrix] + other_matrices)
+            study_concepts = set(doc_matrix.row_labels)
+        return theblend, study_concepts
 
     def get_assoc_blend(self):
         other_matrices = []
@@ -220,12 +263,16 @@ class Study(QtCore.QObject):
     def get_eigenstuff(self):
         self._step('Finding eigenvectors...')
         document_matrix = self.get_documents_matrix()
-        theblend, study_concepts = self.get_assoc_blend()
+        theblend, study_concepts = self.get_blend()
         U, Sigma, V = theblend.normalize_all().svd(k=self.num_axes)
         indices = [U.row_index(concept) for concept in study_concepts]
         reduced_U = U[indices]
-        doc_rows = divisi2.aligned_matrix_multiply(document_matrix.normalize_rows(), reduced_U)
-        projections = reduced_U.extend(doc_rows)
+        if self.is_associative():
+            doc_rows = divisi2.aligned_matrix_multiply(document_matrix.normalize_rows(), reduced_U)
+            projections = reduced_U.extend(doc_rows)
+        else:
+            doc_indices = [V.row_index(doc.name) for doc in self.documents]
+            projections = reduced_U.extend(V[doc_indices])
         return document_matrix, projections, Sigma
 
     def compute_stats(self, docs, spectral):
@@ -277,8 +324,8 @@ class Study(QtCore.QObject):
             key_concepts = {}
             sdoc_indices = [spectral.col_index(sdoc.name)
                             for sdoc in self.study_documents]
-            doc_occur = np.minimum(1, self._documents_matrix.to_dense())
-            baseline = np.maximum(0.00001, np.sum(np.asarray(doc_occur),
+            doc_occur = np.abs(np.minimum(1, self._documents_matrix.to_dense()))
+            baseline = (0.5 + np.sum(np.asarray(doc_occur),
               axis=0)) / doc_occur.shape[0]
             for doc in self.canonical_documents:
                 c_centrality[doc.name] = centrality.entry_named(doc.name)
@@ -286,7 +333,7 @@ class Study(QtCore.QObject):
                 docvec /= (0.00001 + np.sum(docvec))
                 keyvec = divisi2.aligned_matrix_multiply(docvec, doc_occur)
                 # FIXME: this is a totally made up heuristic
-                interesting = keyvec - 1.2*baseline
+                interesting = keyvec / baseline
                 key_concepts[doc.name] = []
                 for key, val in interesting.top_items(5):
                     key_concepts[doc.name].append((key, keyvec.entry_named(key)))
@@ -306,7 +353,11 @@ class Study(QtCore.QObject):
         self._documents_matrix = None
         docs, projections, Sigma = self.get_eigenstuff()
         magnitudes = np.sqrt(np.sum(np.asarray(projections*projections), axis=1))
-        spectral = divisi2.reconstruct_activation(projections, Sigma, post_normalize=True)
+        if self.is_associative():
+            spectral = divisi2.reconstruct_activation(projections, Sigma, post_normalize=True)
+        else:
+            spectral = divisi2.reconstruct_similarity(projections, Sigma,
+            post_normalize=True)
         self._step('Calculating stats...')
         stats = self.compute_stats(docs, spectral)
         
@@ -511,8 +562,20 @@ class StudyDirectory(QtCore.QObject):
         else:
             return files
 
+    def convert_old_study():
+        print "Converting Divisi1 to Divisi2 study."
+        from csc.divisi2.network import conceptnet_matrix
+        cnet_matrix = conceptnet_matrix('en')
+        divisi2.save(cnet_matrix, self.study_path(os.path.join("Matrices",
+        "conceptnet_en.smat")))
+
     def get_matrices_files(self):
         self._ensure_dir_exists("Matrices")
+        dirlist = self.listdir('Matrices', text_only=False, full_names=True)
+        if ('conceptnet.pickle' in dirlist and
+            'conceptnet_en.smat' not in dirlist):
+            self.convert_old_study()
+            
         return self.listdir('Matrices', text_only=False, full_names=True)
 
     def get_documents(self):
@@ -527,7 +590,8 @@ class StudyDirectory(QtCore.QObject):
 
     def get_matrices(self):
         return dict((os.path.basename(filename), divisi2.load(filename))
-                    for filename in self.get_matrices_files())
+                    for filename in self.get_matrices_files()
+                    if filename.endswith('.smat'))
     
 
     def get_study(self):

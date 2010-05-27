@@ -955,7 +955,8 @@ class SVDViewPanel(QWidget):
             pcs = ["", "Default"] + ["Axis %d" % i for i in xrange(self.viewer.k)]
             chooser.insertItems(0, pcs)
             chooser.insertItems(2, canonical)
-            chooser.setCompleter(QCompleter(self.viewer.labels))
+            # FIXME: why doesn't this work anymore?
+            #chooser.setCompleter(QCompleter(self.viewer.labels))
             chooser.setCurrentIndex(1)
 
     def update_choosers(self):
