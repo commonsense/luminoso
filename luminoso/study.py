@@ -271,7 +271,8 @@ class Study(QtCore.QObject):
             doc_rows = divisi2.aligned_matrix_multiply(document_matrix.normalize_rows(), reduced_U)
             projections = reduced_U.extend(doc_rows)
         else:
-            doc_indices = [V.row_index(doc.name) for doc in self.documents]
+            doc_indices = [V.row_index(doc.name) for doc in self.documents
+                           if doc in V.row_labels]
             projections = reduced_U.extend(V[doc_indices])
         return document_matrix, projections, Sigma
 
@@ -294,7 +295,8 @@ class Study(QtCore.QObject):
         else:
             concept_sums = docs.col_op(np.sum)
             doc_indices = [spectral.left.row_index(doc.name) for doc in
-                           self.study_documents]
+                           self.study_documents
+                           if doc in spectral.left.row_labels]
             
             # Compute the association of all study documents with each other
             assoc_grid = np.asarray(spectral[doc_indices, doc_indices].to_dense())
@@ -323,7 +325,8 @@ class Study(QtCore.QObject):
             c_centrality = {}
             key_concepts = {}
             sdoc_indices = [spectral.col_index(sdoc.name)
-                            for sdoc in self.study_documents]
+                            for sdoc in self.study_documents
+                            if sdoc in spectral.col_labels]
             doc_occur = np.abs(np.minimum(1, self._documents_matrix.to_dense()))
             baseline = (0.5 + np.sum(np.asarray(doc_occur),
               axis=0)) / doc_occur.shape[0]
