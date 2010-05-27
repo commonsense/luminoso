@@ -2,7 +2,7 @@ from bbfreeze import Freezer
 import os
 import shutil
 from luminoso.window import VERSION
-f = Freezer("dist/luminoso", includes=("sip", "PyQt4", "jinja2", "luminoso.study"), excludes=("django", "nose", "bzrlib", "south"))
+f = Freezer("dist/luminoso", includes=("sip", "PyQt4", "jinja2", "luminoso.study", "csc.divisi2"), excludes=("django", "nose", "bzrlib", "south"))
 f.addScript("luminoso/run_luminoso.py", gui_only=True)
 f()
 
