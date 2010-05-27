@@ -28,6 +28,10 @@ from luminoso.report import render_info_page, default_info_page
 
 import shutil
 
+# FIXME: make this configurable per study
+# Making it false right now because it screws up all the statistics.
+SUBTRACT_MEAN = False
+
 try:
     import json
 except ImportError:
@@ -276,6 +280,13 @@ class Study(QtCore.QObject):
                            for doc in self.documents
                            if doc.name in V.row_labels]
             projections = reduced_U.extend(V[doc_indices])
+        
+        if SUBTRACT_MEAN:
+            sdoc_indices = [projections.row_index(doc.name) for doc in
+            self.study_documents if doc.name in projections.row_labels]
+            projections -= projections[sdoc_indices].mean(axis=0)
+
+
         return document_matrix, projections, Sigma
 
     def compute_stats(self, docs, spectral):
@@ -634,7 +645,7 @@ class StudyDirectory(QtCore.QObject):
             return None
 
 def test():
-    study = StudyDirectory('../HeadAndShouldersStudy')
+    study = StudyDirectory('../ThaiFoodStudy')
     study.analyze()
 
 if __name__ == '__main__':
