@@ -62,7 +62,7 @@ class Document(object):
         current_sentence = []
         for word in words:
             if word in PUNCTUATION:
-                if len(current_sentence) > 2:
+                if len(current_sentence) >= 1:
                     sentences.append(current_sentence)
                     current_sentence = []
             else:
@@ -173,10 +173,10 @@ class Study(QtCore.QObject):
         self._step('Finding associated concepts...')
         if self.num_documents == 0: return None
         docs = self.get_documents_matrix()
-        concept_counts = docs.col_op(entry_count)
+        concept_counts = docs.col_op(len)
         valid_concepts = set()
         for concept, count in concept_counts.to_sparse().named_items():
-            if ' ' not in concept or count >= 2: valid_concepts.add(concept)
+            if count >= 3: valid_concepts.add(concept)
 
         entries = []
         for doc in self.study_documents:
@@ -205,6 +205,7 @@ class Study(QtCore.QObject):
             return self.get_analogy_blend()
     
     def is_associative(self):
+        if not self.other_matrices: return True
         return any(name.endswith('.assoc.smat') for name in
                    self.other_matrices)
 
@@ -215,10 +216,10 @@ class Study(QtCore.QObject):
         
         # find concepts used at least twice
         docs = self.get_documents_matrix()
-        concept_counts = docs.col_op(entry_count)
+        concept_counts = docs.col_op(len)
         valid_concepts = set()
         for concept, count in concept_counts.to_sparse().named_items():
-            if ' ' not in concept or count >= 2: valid_concepts.add(concept)
+            if count >= 3: valid_concepts.add(concept)
         
         # extract relevant concepts from the doc matrix;
         # transpose it so it's concepts vs. documents
@@ -271,8 +272,9 @@ class Study(QtCore.QObject):
             doc_rows = divisi2.aligned_matrix_multiply(document_matrix.normalize_rows(), reduced_U)
             projections = reduced_U.extend(doc_rows)
         else:
-            doc_indices = [V.row_index(doc.name) for doc in self.documents
-                           if doc in V.row_labels]
+            doc_indices = [V.row_index(doc.name)
+                           for doc in self.documents
+                           if doc.name in V.row_labels]
             projections = reduced_U.extend(V[doc_indices])
         return document_matrix, projections, Sigma
 
@@ -294,12 +296,13 @@ class Study(QtCore.QObject):
             core = None
         else:
             concept_sums = docs.col_op(np.sum)
-            doc_indices = [spectral.left.row_index(doc.name) for doc in
-                           self.study_documents
-                           if doc in spectral.left.row_labels]
+            doc_indices = [spectral.left.row_index(doc.name)
+                           for doc in self.study_documents
+                           if doc.name in spectral.left.row_labels]
             
             # Compute the association of all study documents with each other
             assoc_grid = np.asarray(spectral[doc_indices, doc_indices].to_dense())
+            assert not np.any(np.isnan(assoc_grid))
             assoc_list = []
             for i in xrange(1, assoc_grid.shape[0]):
                 assoc_list.extend(assoc_grid[i, :i])
@@ -317,7 +320,7 @@ class Study(QtCore.QObject):
             all_stderr = all_stdev / np.sqrt(len(doc_indices))
             centrality = divisi2.DenseVector((all_means - reference_mean) /
             ztest_stderr, spectral.row_labels)
-            core = centrality.top_items(50)
+            core = centrality.top_items(100)
             core = [c[0] for c in core
                     if c[0] in concept_sums.labels
                     and concept_sums.entry_named(c[0]) >= 2][:10]
@@ -326,9 +329,9 @@ class Study(QtCore.QObject):
             key_concepts = {}
             sdoc_indices = [spectral.col_index(sdoc.name)
                             for sdoc in self.study_documents
-                            if sdoc in spectral.col_labels]
+                            if sdoc.name in spectral.col_labels]
             doc_occur = np.abs(np.minimum(1, self._documents_matrix.to_dense()))
-            baseline = (0.5 + np.sum(np.asarray(doc_occur),
+            baseline = (1.0 + np.sum(np.asarray(doc_occur),
               axis=0)) / doc_occur.shape[0]
             for doc in self.canonical_documents:
                 c_centrality[doc.name] = centrality.entry_named(doc.name)
@@ -357,16 +360,15 @@ class Study(QtCore.QObject):
         docs, projections, Sigma = self.get_eigenstuff()
         magnitudes = np.sqrt(np.sum(np.asarray(projections*projections), axis=1))
         if self.is_associative():
-            spectral = divisi2.reconstruct_activation(projections, Sigma, post_normalize=True)
+            spectral = divisi2.reconstruct_activation(projections+0.00001, Sigma, post_normalize=True)
         else:
-            spectral = divisi2.reconstruct_similarity(projections, Sigma,
+            spectral = divisi2.reconstruct_similarity(projections+0.00001, Sigma,
             post_normalize=True)
         self._step('Calculating stats...')
         stats = self.compute_stats(docs, spectral)
         
         results = StudyResults(self, docs, spectral.left, spectral, magnitudes, stats)
         return results
-
 
 class StudyResults(QtCore.QObject):
     def __init__(self, study, docs, projections, spectral, magnitudes, stats):
@@ -627,7 +629,7 @@ class StudyDirectory(QtCore.QObject):
             return None
 
 def test():
-    study = StudyDirectory('../ThaiFoodStudy')
+    study = StudyDirectory('../HeadAndShouldersStudy')
     study.analyze()
 
 if __name__ == '__main__':

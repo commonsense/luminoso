@@ -87,9 +87,8 @@ class Projection(QObject):
         self.target_matrix[:,1] /= np.linalg.norm(self.target_matrix[:,1])
         self.target_matrix[:,:] = self.target_matrix*(power) + prev*(1-power)
         if np.any(np.isnan(self.target_matrix)):
-            # "rollback" to a projection we know was valid
-            print 'rollback'
-            self.target_matrix = prev
+            # better recovery
+            self.luminoso.reset_view()
 
     def move_towards(self, vec, target):
         orig = self.components_to_target(vec)
@@ -329,7 +328,10 @@ class PointLayer(Layer):
         else:
             sizes = np.sum(self.luminoso.array ** 2, axis=-1) ** 0.25
         sizes /= (np.sum(sizes) / len(sizes))
-        sizes *= self.luminoso.scale / 40000
+        sizes *= self.luminoso.scale * np.sqrt(len(sizes)) / 1000000
+        for i in xrange(len(self.luminoso.labels)):
+            if self.luminoso.labels[i].endswith('.txt'):
+                sizes[i] /= 10
         return sizes
 
 class LabelLayer(Layer):

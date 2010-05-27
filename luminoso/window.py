@@ -158,7 +158,8 @@ class MainWindow(QtGui.QMainWindow):
         self.add_action("&File", "&Open study...", self.load_study_dialog, "Ctrl+O", 'actions/document-open.png')
         self.add_action("&File", "&Edit study...", self.edit_study, "Ctrl+E", 'actions/document-properties.png')
         self.add_action("&Analysis", "&Analyze", self.analyze, "Ctrl+A", 'actions/go-next.png')
-        self.add_action("&Analysis", "Show Study &Info", self.show_info, "Ctrl+I")
+        self.add_action("&Analysis", "Show Study &Info", self.show_info,
+        "Ctrl+I", "actions/edit-find.png")
         self.add_action("&Viewer", "&Reset view", self.ui.svdview_panel.reset_view, "Ctrl+R")
         self.toolbar.addSeparator()
         self.add_action("&Viewer", "&Previous axis", self.ui.svdview_panel.prev_axis, "Ctrl+Left", 'actions/media-seek-backward.png')
