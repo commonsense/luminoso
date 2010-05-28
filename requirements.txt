@@ -1,4 +1,4 @@
-divisi>=0.6.10
+divisi2
 ipython
 chardet
 jinja2

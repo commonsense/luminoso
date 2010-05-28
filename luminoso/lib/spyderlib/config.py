@@ -64,7 +64,7 @@ try:
     width, height = rcParams['figure.figsize']
     dpi = rcParams['figure.dpi']
     MPL_SIZE = (width*dpi, height*dpi)
-except ImportError:
+except (ImportError, RuntimeError):
     MPL_SIZE = (400, 300)
 
 DEFAULTS = [

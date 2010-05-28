@@ -6,10 +6,19 @@ import time
 
 def render_info_page(results):
     study_name = results.study.name
-    num_documents = results.stats['num_documents']
-    num_concepts = results.stats['num_concepts']
-    consistency = results.stats['consistency']
-    centrality = results.stats['centrality']
+    try:
+        num_documents = results.stats['num_documents']
+        num_concepts = results.stats['num_concepts']
+        consistency = results.stats['consistency']
+        centrality = results.stats['centrality']
+        correlation = results.stats['correlation']
+    except KeyError:
+        return ""
+    key_concepts = {}
+    for key, values in results.stats['key_concepts'].items():
+        kstr = ["%s (%d%%)" % (concept.encode('utf-8'), value*100)
+                for concept, value in values]
+        key_concepts[key] = kstr
     core = results.stats['core']
     canonical = centrality.keys()
 
@@ -36,11 +45,14 @@ template = Template("""
 
 {% if canonical %}
   <h3>Canonical documents</h3>
-  <ul>
+  <dl>
     {% for docname in canonical %}
-      <li><b>{{docname}}</b>: Centrality = {{centrality[docname]|round(2)}}</li>
+      <dt><b>{{docname}}</b></dt>
+      <dd>Centrality: {{centrality[docname]|round(2)}}</dd>
+      <dd>Correlation: {{correlation[docname]|round(2)}}</dd>
+      <dd>Interesting concepts: {{key_concepts[docname]|join(', ')}}</dd>
     {% endfor %}
-  </ul>
+  </dl>
   <p>High centrality (&gt; 2.0) means that the document is typical; its
   semantics agree with the semantics of other documents. Low centrality means
   the document is atypical.</p>

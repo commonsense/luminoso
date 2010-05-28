@@ -28,6 +28,10 @@ from luminoso.report import render_info_page, default_info_page
 
 import shutil
 
+# FIXME: make this configurable per study
+# Making it false right now because it screws up all the statistics.
+SUBTRACT_MEAN = False
+
 try:
     import json
 except ImportError:
@@ -62,7 +66,7 @@ class Document(object):
         current_sentence = []
         for word in words:
             if word in PUNCTUATION:
-                if len(current_sentence) > 2:
+                if len(current_sentence) >= 1:
                     sentences.append(current_sentence)
                     current_sentence = []
             else:
@@ -86,7 +90,7 @@ def extract_concepts_from_words(words):
     negative_words = []
     positive = True
     for word in words:
-        if word in NEGATION:
+        if word.lower() in NEGATION:
             positive = False
         else:
             if positive:
@@ -106,6 +110,9 @@ def load_json_from_file(file):
 def write_json_to_file(data, file):
     with open(file, 'w') as f:
         json.dump(data, f)
+        
+def entry_count(vec):
+    return np.sum(np.abs(vec))
 
 class Study(QtCore.QObject):
     '''
@@ -161,7 +168,7 @@ class Study(QtCore.QObject):
         entries = []
         for doc in self.documents:
             for concept, value in doc.extract_concepts_with_negation():
-                if not en_nl.is_blacklisted(concept):
+                if (concept not in PUNCTUATION) and (not en_nl.is_blacklisted(concept)):
                     entries.append((value, doc.name, concept))
         self._documents_matrix = divisi2.make_sparse(entries)
         return self._documents_matrix
@@ -169,21 +176,76 @@ class Study(QtCore.QObject):
     def get_documents_assoc(self):
         self._step('Finding associated concepts...')
         if self.num_documents == 0: return None
+        docs = self.get_documents_matrix()
+        concept_counts = docs.col_op(len)
+        valid_concepts = set()
+        for concept, count in concept_counts.to_sparse().named_items():
+            if count >= 3: valid_concepts.add(concept)
+
         entries = []
         for doc in self.study_documents:
             concepts = doc.extract_concepts_with_negation()[:100]
             for concept1, value1 in concepts:
-                for concept2, value2 in concepts:
-                    entries.append( (value1*value2, concept1, concept2) )
-                    entries.append( (value1*value2, concept2, concept1) )
+                if concept1 in valid_concepts:
+                    for concept2, value2 in concepts:
+                        if concept2 in valid_concepts and concept1 != concept2:
+                            entries.append( (value1*value2/2, concept1, concept2) )
+                            entries.append( (value1*value2/2, concept2, concept1) )
             for sentence in doc.get_sentences():
                 # avoid insane space usage by limiting to 100 words
                 concepts = extract_concepts_from_words(sentence[:100])
                 for concept1, value1 in concepts:
-                    for concept2, value2 in concepts:
-                        entries.append( (value1*value2, concept1, concept2) )
-                        entries.append( (value1*value2, concept2, concept1) )
-        return divisi2.SparseMatrix.square_from_named_entries(entries)
+                    if concept1 in valid_concepts:
+                        for concept2, value2 in concepts:
+                            if concept2 in valid_concepts and concept1 != concept2:
+                                entries.append( (value1*value2, concept1, concept2) )
+                                entries.append( (value1*value2, concept2, concept1) )
+        return divisi2.SparseMatrix.square_from_named_entries(entries).squish()
+    
+    def get_blend(self):
+        if self.is_associative():
+            return self.get_assoc_blend()
+        else:
+            return self.get_analogy_blend()
+    
+    def is_associative(self):
+        if not self.other_matrices: return True
+        return any(name.endswith('.assoc.smat') for name in
+                   self.other_matrices)
+
+    def get_analogy_blend(self):
+        other_matrices = [matrix for name, matrix in
+        self.other_matrices.items() if name.endswith('.smat')]
+        other_matrices = self.other_matrices.values()
+        
+        # find concepts used at least twice
+        docs = self.get_documents_matrix()
+        concept_counts = docs.col_op(len)
+        valid_concepts = set()
+        for concept, count in concept_counts.to_sparse().named_items():
+            if count >= 3: valid_concepts.add(concept)
+        
+        # extract relevant concepts from the doc matrix;
+        # transpose it so it's concepts vs. documents
+        orig_doc_matrix = self.get_documents_matrix()
+        #sdoc_indices = [orig_doc_matrix.row_index(sdoc.name)
+        #                for sdoc in self.study_documents]
+        concept_indices = [orig_doc_matrix.col_index(c)
+                           for c in valid_concepts]
+
+        # NOTE: canonical documents can affect the stats this way.
+        # Is there a clean way to fix this?
+
+        doc_matrix = orig_doc_matrix[:,concept_indices].T.squish()
+        if doc_matrix is None:
+            blend_entries = other_matrices
+            study_concepts = set(theblend.row_labels)
+        else:
+            blend_entries = [doc_matrix] + other_matrices
+            study_concepts = set(doc_matrix.row_labels)
+        blendsvd = blend_svd([mat.normalize_all() for mat in blend_entries],
+                             k=self.num_axes)
+        return blendsvd, study_concepts
 
     def get_assoc_blend_svd(self):
         other_matrices = []
@@ -214,8 +276,21 @@ class Study(QtCore.QObject):
         U, Sigma, V = blendsvd
         indices = [U.row_index(concept) for concept in study_concepts]
         reduced_U = U[indices]
-        doc_rows = divisi2.aligned_matrix_multiply(document_matrix.normalize_rows(), reduced_U)
-        projections = reduced_U.extend(doc_rows)
+        if self.is_associative():
+            doc_rows = divisi2.aligned_matrix_multiply(document_matrix.normalize_rows(), reduced_U)
+            projections = reduced_U.extend(doc_rows)
+        else:
+            doc_indices = [V.row_index(doc.name)
+                           for doc in self.documents
+                           if doc.name in V.row_labels]
+            projections = reduced_U.extend(V[doc_indices])
+        
+        if SUBTRACT_MEAN:
+            sdoc_indices = [projections.row_index(doc.name) for doc in
+            self.study_documents if doc.name in projections.row_labels]
+            projections -= projections[sdoc_indices].mean(axis=0)
+
+
         return document_matrix, projections, Sigma
 
     def compute_stats(self, docs, spectral):
@@ -229,20 +304,27 @@ class Study(QtCore.QObject):
         is. Same general idea as "congruence" from Luminoso 1.0.
         """
 
-        if len(self.study_documents) == 0:
+        if len(self.study_documents) <= 1:
             # consistency and centrality are undefined
             consistency = None
             centrality = None
+            correlation = None
             core = None
         else:
             concept_sums = docs.col_op(np.sum)
-            doc_indices = [spectral.left.row_index(doc.name) for doc in
-                           self.study_documents]
+            doc_indices = [spectral.left.row_index(doc.name)
+                           for doc in self.study_documents
+                           if doc.name in spectral.left.row_labels]
             
             # Compute the association of all study documents with each other
-            reference_assoc = np.asarray(spectral[doc_indices, doc_indices].to_dense())
-            reference_mean = np.mean(reference_assoc)
-            reference_stdev = np.std(reference_assoc)
+            assoc_grid = np.asarray(spectral[doc_indices, doc_indices].to_dense())
+            assert not np.any(np.isnan(assoc_grid))
+            assoc_list = []
+            for i in xrange(1, assoc_grid.shape[0]):
+                assoc_list.extend(assoc_grid[i, :i])
+
+            reference_mean = np.mean(assoc_list)
+            reference_stdev = np.std(assoc_list)
             reference_stderr = reference_stdev / len(doc_indices)
             consistency = reference_mean / reference_stderr
 
@@ -253,21 +335,41 @@ class Study(QtCore.QObject):
             all_stdev = np.std(all_assoc, axis=1)
             all_stderr = all_stdev / np.sqrt(len(doc_indices))
             centrality = divisi2.DenseVector((all_means - reference_mean) /
-            ztest_stderr, spectral.row_labels)
-            core = centrality.top_items(50)
+              ztest_stderr, spectral.row_labels)
+            correlation = divisi2.DenseVector(all_means / ztest_stderr,
+              spectral.row_labels)
+            core = centrality.top_items(100)
             core = [c[0] for c in core
                     if c[0] in concept_sums.labels
                     and concept_sums.entry_named(c[0]) >= 2][:10]
 
             c_centrality = {}
+            c_correlation = {}
+            key_concepts = {}
+            sdoc_indices = [spectral.col_index(sdoc.name)
+                            for sdoc in self.study_documents
+                            if sdoc.name in spectral.col_labels]
+            doc_occur = np.abs(np.minimum(1, self._documents_matrix.to_dense()))
+            baseline = (1.0 + np.sum(np.asarray(doc_occur),
+              axis=0)) / doc_occur.shape[0]
             for doc in self.canonical_documents:
                 c_centrality[doc.name] = centrality.entry_named(doc.name)
+                c_correlation[doc.name] = correlation.entry_named(doc.name)
+                docvec = np.maximum(0, spectral.row_named(doc.name)[sdoc_indices])
+                docvec /= (0.00001 + np.sum(docvec))
+                keyvec = divisi2.aligned_matrix_multiply(docvec, doc_occur)
+                interesting = keyvec / baseline
+                key_concepts[doc.name] = []
+                for key, val in interesting.top_items(5):
+                    key_concepts[doc.name].append((key, keyvec.entry_named(key)))
         
         return {
             'num_documents': self.num_documents,
             'num_concepts': spectral.shape[0] - self.num_documents,
             'consistency': consistency,
             'centrality': c_centrality,
+            'correlation': c_correlation,
+            'key_concepts': key_concepts,
             'core': core,
             'timestamp': list(time.localtime())
         }
@@ -276,24 +378,29 @@ class Study(QtCore.QObject):
         # TODO: make it possible to blend multiple directories
         self._documents_matrix = None
         docs, projections, Sigma = self.get_eigenstuff()
-        spectral = divisi2.reconstruct_activation(projections, Sigma, post_normalize=False)
+        magnitudes = np.sqrt(np.sum(np.asarray(projections*projections), axis=1))
+        if self.is_associative():
+            spectral = divisi2.reconstruct_activation(projections+0.00001, Sigma, post_normalize=True)
+        else:
+            spectral = divisi2.reconstruct_similarity(projections+0.00001, Sigma,
+            post_normalize=True)
         self._step('Calculating stats...')
         stats = self.compute_stats(docs, spectral)
         
-        results = StudyResults(self, docs, spectral.left, spectral, stats)
+        results = StudyResults(self, docs, spectral.left, spectral, magnitudes, stats)
         return results
 
-
 class StudyResults(QtCore.QObject):
-    def __init__(self, study, docs, projections, spectral, stats):
+    def __init__(self, study, docs, projections, spectral, magnitudes, stats):
         QtCore.QObject.__init__(self)
         self.study = study
         self.docs = docs
         self.spectral = spectral
         self.projections = projections
+        self.magnitudes = magnitudes
         self.stats = stats
         self.canonical_filenames = [doc.name for doc in study.canonical_documents]
-        self.info = None
+        self.info = render_info_page(self)
 
     def write_coords_as_csv(self, filename):
         # FIXME: not divisi2 ready
@@ -330,6 +437,25 @@ class StudyResults(QtCore.QObject):
         if self.info is not None: return self.info
         else: return default_info_page(self.study)
 
+    def get_concept_info(self, concept):
+        if concept not in self.spectral.row_labels: return None
+        related = self.spectral.row_named(concept).top_items(10)
+        related = [x[0] for x in related if not x[0].endswith('.txt')]
+        documents = [x[1] for x in self.docs.col_named(concept).named_entries()]
+
+        related_str = ', '.join(related[:5])
+        documents_str = ', '.join(documents[:10])
+        if len(documents) > 10: documents_str += '...'
+        # TODO: make this a jinja template
+        html = """
+        <h2>%(concept)s</h2>
+        <ul>
+        <li>Related concepts: %(related_str)s</li>
+        <li>From documents: %(documents_str)s</li>
+        </ul>
+        """ % locals()
+        return html
+
     def save(self, dir):
         def tgt(name): return os.path.join(dir, name)
         def save_pickle(name, obj):
@@ -344,6 +470,9 @@ class StudyResults(QtCore.QObject):
         
         self.study._step('Saving projections...')
         save_pickle('projections.dmat', self.projections)
+
+        self.study._step('Saving magnitudes...')
+        save_pickle('magnitudes.dvec', self.magnitudes)
 
         self.study._step('Writing reports...')
         # Save stats
@@ -375,12 +504,14 @@ class StudyResults(QtCore.QObject):
         spectral = load_pickle("spectral.rmat")
         for_study._step('Loading projections...')
         projections = load_pickle("projections.dmat")
+        for_study._step('Loading magnitudes...')
+        magnitudes = load_pickle("magnitudes.dvec")
 
         # Load stats
         for_study._step('Loading stats...')
         stats = load_json_from_file(tgt("stats.json"))
 
-        return cls(for_study, docs, projections, spectral, stats)
+        return cls(for_study, docs, projections, spectral, magnitudes, stats)
 
 class StudyDirectory(QtCore.QObject):
     '''
@@ -402,7 +533,9 @@ class StudyDirectory(QtCore.QObject):
         os.mkdir(destdir)
         for dir in ['Canonical', 'Documents', 'Matrices', 'Results']:
             os.mkdir(dest_path(dir))
-        shutil.copy(os.path.join(package_dir, 'study_skel', 'Matrices', 'conceptnet.pickle'), os.path.join(destdir, 'Matrices', 'conceptnet.pickle'))
+        shutil.copy(os.path.join(package_dir, 'study_skel', 'Matrices',
+        'conceptnet_en.assoc.smat'), os.path.join(destdir, 'Matrices',
+        'conceptnet_en.assoc.smat'))
         write_json_to_file({}, dest_path('settings.json'))
 
         return StudyDirectory(destdir)
@@ -456,8 +589,20 @@ class StudyDirectory(QtCore.QObject):
         else:
             return files
 
+    def convert_old_study():
+        print "Converting Divisi1 to Divisi2 study."
+        from csc.divisi2.network import conceptnet_matrix
+        cnet_matrix = conceptnet_matrix('en')
+        divisi2.save(cnet_matrix, self.study_path(os.path.join("Matrices",
+        "conceptnet_en.smat")))
+
     def get_matrices_files(self):
         self._ensure_dir_exists("Matrices")
+        dirlist = self.listdir('Matrices', text_only=False, full_names=True)
+        if ('conceptnet.pickle' in dirlist and
+            'conceptnet_en.smat' not in dirlist):
+            self.convert_old_study()
+            
         return self.listdir('Matrices', text_only=False, full_names=True)
 
     def get_documents(self):
@@ -472,7 +617,8 @@ class StudyDirectory(QtCore.QObject):
 
     def get_matrices(self):
         return dict((os.path.basename(filename), divisi2.load(filename))
-                    for filename in self.get_matrices_files())
+                    for filename in self.get_matrices_files()
+                    if filename.endswith('.smat'))
     
 
     def get_study(self):
@@ -499,6 +645,7 @@ class StudyDirectory(QtCore.QObject):
         try:
             return StudyResults.load(self.study_path('Results'), self.get_study())
         except OutdatedAnalysisError:
+            print "Skipping outdated analysis."
             return None
 
 def test():

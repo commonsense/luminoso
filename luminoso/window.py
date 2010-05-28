@@ -39,6 +39,7 @@ class MainWindow(QtGui.QMainWindow):
         self.setCentralWidget(self.ui)
 
         self.study = None
+        self.results = None
         self.already_closed = False
 
         self.menus = {}
@@ -58,8 +59,7 @@ class MainWindow(QtGui.QMainWindow):
 
         
         # Set up the embedded console.
-        sys._stderr = sys.stderr
-        if not '--no-console' in sys.argv:
+        if '--console' in sys.argv:
             from spyderlib.plugins.console import Console
             self.console = Console(self, commands=[], namespace=self.__dict__)
             self.ui.tab_stack.addTab(self.console, "Console")
@@ -69,7 +69,7 @@ class MainWindow(QtGui.QMainWindow):
             self.console.shell.execute_command("cls")
         
         logger.addHandler(logging.StreamHandler(sys.stdout))
-        logger.addHandler(logging.StreamHandler(sys._stderr))
+        logger.addHandler(logging.StreamHandler(sys._stdout))
 
         # Connect the tree to the filesystem
         self.dir_model = QtGui.QFileSystemModel()
@@ -98,12 +98,19 @@ class MainWindow(QtGui.QMainWindow):
         label = self.ui.svdview_panel.get_selected_label()
 
         if label is not None:
-            index = self.ui.tree_view.find_filename_index(label)
-            if index is not None:
-                self.ui.tree_view.setSelection(self.ui.tree_view.visualRect(index), self.ui.tree_view.selectionModel().ClearAndSelect)
+            self.selected_label(label)
 
-                text = self.ui.tree_view.get_file_contents_at(index)
-                self.ui.show_document_info(label, text)
+    def selected_label(self, label):
+        index = self.ui.tree_view.find_filename_index(label)
+        if index is not None:
+            self.ui.tree_view.setSelection(self.ui.tree_view.visualRect(index), self.ui.tree_view.selectionModel().ClearAndSelect)
+
+            text = self.ui.tree_view.get_file_contents_at(index)
+            self.ui.show_document_info(label, text)
+        elif self.results is not None:
+            # we might be able to show some information here
+            info = self.results.get_concept_info(label)
+            if info is not None: self.ui.show_info(info)
 
     def toolbar_search(self):
         self.search(self.ui.search_box.text())
@@ -114,7 +121,7 @@ class MainWindow(QtGui.QMainWindow):
     def select_document(self, modelIndex):
         filename = self.ui.tree_view.get_filename_at(modelIndex)
         self.ui.svdview_panel.find_point(filename)
-	if filename == u'NotImplemented': filename = ''
+        if filename == u'NotImplemented': filename = ''
 
         #Changes the text in the info panel
         text = self.ui.tree_view.get_file_contents_at(modelIndex)
@@ -150,7 +157,8 @@ class MainWindow(QtGui.QMainWindow):
         self.add_action("&File", "&Open study...", self.load_study_dialog, "Ctrl+O", 'actions/document-open.png')
         self.add_action("&File", "&Edit study...", self.edit_study, "Ctrl+E", 'actions/document-properties.png')
         self.add_action("&Analysis", "&Analyze", self.analyze, "Ctrl+A", 'actions/go-next.png')
-        self.add_action("&Analysis", "Show Study &Info", self.show_info, "Ctrl+I")
+        self.add_action("&Analysis", "Show Study &Info", self.show_info,
+        "Ctrl+I", "actions/edit-find.png")
         self.add_action("&Viewer", "&Reset view", self.ui.svdview_panel.reset_view, "Ctrl+R")
         self.toolbar.addSeparator()
         self.add_action("&Viewer", "&Previous axis", self.ui.svdview_panel.prev_axis, "Ctrl+Left", 'actions/media-seek-backward.png')
@@ -187,7 +195,8 @@ class MainWindow(QtGui.QMainWindow):
             self.update_options()
             self.disconnect(self.study, QtCore.SIGNAL('step(QString)'), progress.tick)
 
-        self.show_info(results)
+        self.results = results
+        self.show_info()
         self.study_loaded() # TODO: Make it a slot.
 
     def study_loaded(self, loaded=True):
@@ -234,11 +243,12 @@ class MainWindow(QtGui.QMainWindow):
             self.ui.svdview_panel.deactivate()
         else:
             self.ui.svdview_panel.activate(results.docs, results.projections,
+                                           results.magnitudes,
                                            results.canonical_filenames)
     
-    def show_info(self, results):
-        if results is not None:
-            self.ui.show_info(results.get_info())
+    def show_info(self):
+        if self.results is not None:
+            self.ui.show_info(self.results.get_info())
         else:
             self.ui.show_info("Click <b>Analyze</b> to analyze this study.")
 
@@ -259,7 +269,8 @@ class MainWindow(QtGui.QMainWindow):
             logger.info('Analysis finished.')
             progress.tick('Updating view')
             self.update_svdview(results)
-            self.show_info(results)
+            self.results = results
+            self.show_info()
             self.disconnect(self.study, QtCore.SIGNAL('step(QString)'), progress.tick)
 
     def set_study_dir(self, dir):
