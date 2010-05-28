@@ -6,8 +6,6 @@ import sys, os
 import traceback
 
 # Back up stdout before spyder redirects it to its console.
-sys.path.append(os.path.dirname(__file__) + "/lib")
-sys.path.append(os.path.dirname(__file__))
 sys._stdout = sys.stdout
 
 def initialize():
