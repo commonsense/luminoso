@@ -1,11 +1,14 @@
 #!/usr/bin/env python
-VERSION = "1.0.2"
+VERSION = "1.2.0"
 
 from setuptools import setup, find_packages
 import os.path, sys
 from stat import ST_MTIME
 
-import modulefinder
+if 'py2exe' in sys.argv:
+    import py2exe
+
+import modulefinder, csc.util, csc.divisi2
 for p in sys.path:
    modulefinder.AddPackagePath(__name__, p)
 sys.path.append('luminoso/lib')
@@ -26,9 +29,9 @@ classifiers=[
     'Topic :: Software Development',
     'Topic :: Text Processing :: Linguistic',]
 
-INCLUDES = ["sip", "PyQt4.QtCore", "PyQt4.Qt", "PyQt4.QtGui", "PyQt4._qt",
-            'csc.divisi.tensor', 'spyderlib', 'standalone_nlp.nl', 'standalone_nlp.lang_en', 'standalone_nlp.euro', 'standalone_nlp.trie', 'jinja2', 'numpy',
-            'simplejson', 'chardet']
+INCLUDES = ["sip", "PyQt4.QtCore", "PyQt4.Qt", "PyQt4.QtGui", "PyQt4",
+            'csc.util', 'csc.divisi2', 'spyderlib', 'standalone_nlp.nl', 'standalone_nlp.lang_en', 'standalone_nlp.euro', 'standalone_nlp.trie', 'jinja2', 'numpy',
+            'chardet']
 DATA_FILES = ['icons']
 
 setup(
@@ -46,13 +49,14 @@ setup(
     app=['luminoso/run_luminoso.py'],
     scripts=['luminoso/run_luminoso.py'],
     windows=[{'script': 'luminoso/run_luminoso.py'}],
-    install_requires=['csc-utils >= 0.4.2', 'divisi >= 0.6.8', 'ipython >= 0.9.1', 'jinja2', 'chardet'],
+    install_requires=['csc-utils >= 0.4.2', 'divisi2', 'ipython >= 0.9.1', 'jinja2', 'chardet'],
     package_data={'csc.nl': ['mblem/*.pickle', 'en/*.txt']},
     include_package_data=True,
     #data_files=DATA_FILES,
     options={'py2exe': {
             'skip_archive': True,
             'includes': INCLUDES,
+            'excludes': ["Tkconstants","Tkinter","tcl"]
         },
         'py2app': {
             "argv_emulation": True,
@@ -60,5 +64,5 @@ setup(
         },
     },
 
-    entry_points={'console_scripts': ['luminoso = luminoso.run_luminoso:main']},
+    entry_points={'gui_scripts': ['luminoso = luminoso.run_luminoso:main']},
 )
