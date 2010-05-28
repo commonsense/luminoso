@@ -7,6 +7,7 @@ import traceback
 
 # Back up stdout before spyder redirects it to its console.
 sys._stdout = sys.stdout
+sys._stderr = sys.stderr
 
 def initialize():
     app = QtGui.QApplication(sys.argv)
@@ -45,7 +46,7 @@ def main(app=None):
         splash.finish(window)
         app.exec_()
     except:
-        traceback.print_exc(file=sys._stdout)
+        traceback.print_exc(file=sys._stderr)
 
 if __name__ == '__main__':
     main()
