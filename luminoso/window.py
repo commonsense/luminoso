@@ -59,8 +59,7 @@ class MainWindow(QtGui.QMainWindow):
 
         
         # Set up the embedded console.
-        sys._stderr = sys.stderr
-        if not '--no-console' in sys.argv:
+        if '--console' in sys.argv:
             from spyderlib.plugins.console import Console
             self.console = Console(self, commands=[], namespace=self.__dict__)
             self.ui.tab_stack.addTab(self.console, "Console")
@@ -70,7 +69,7 @@ class MainWindow(QtGui.QMainWindow):
             self.console.shell.execute_command("cls")
         
         logger.addHandler(logging.StreamHandler(sys.stdout))
-        logger.addHandler(logging.StreamHandler(sys._stderr))
+        logger.addHandler(logging.StreamHandler(sys._stdout))
 
         # Connect the tree to the filesystem
         self.dir_model = QtGui.QFileSystemModel()
