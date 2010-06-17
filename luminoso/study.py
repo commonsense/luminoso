@@ -88,9 +88,15 @@ def extract_concepts_from_words(words):
     # FIXME: this may join together words from different contexts...
     positive_words = []
     negative_words = []
+    neg_tagged_words = []
+    pos_tagged_words = []
     positive = True
     for word in words:
-        if word.lower() in NEGATION:
+        if word.startswith('#-'):
+            neg_tagged_words.append(word)
+        elif word.startswith('#'):
+            pos_tagged_words.append(word)
+        elif word.lower() in NEGATION:
             positive = False
         else:
             if positive:
@@ -101,7 +107,9 @@ def extract_concepts_from_words(words):
                 positive = True
     positive_concepts = [(c, 1) for c in en_nl.extract_concepts(' '.join(positive_words))]
     negative_concepts = [(c, -1) for c in en_nl.extract_concepts(' '.join(negative_words))]
-    return positive_concepts + negative_concepts
+    neg_tagged_concepts = [(c, -1) for c in neg_tagged_words]
+    pos_tagged_concepts = [(c, 1) for c in pos_tagged_words]
+    return positive_concepts + pos_tagged_concepts + negative_concepts + neg_tagged_concepts
 
 def load_json_from_file(file):
     with open(file) as f:
