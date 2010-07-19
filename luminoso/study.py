@@ -1,3 +1,4 @@
+from __future__ import with_statement
 """
 This class provides the model to SVDView's view, calculating a blend of all
 the components of a study that it finds in the filesystem.
