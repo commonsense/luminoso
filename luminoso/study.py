@@ -171,7 +171,9 @@ class Study(QtCore.QObject):
         will be needed multiple times in analyzing a study.
         """
         self._step('Building document matrix...')
-        if self.num_documents == 0: return None
+        if self.num_documents == 0:
+            assert False
+            return None
         if self._documents_matrix is not None:
             return self._documents_matrix
         entries = []
@@ -285,7 +287,7 @@ class Study(QtCore.QObject):
         indices = [U.row_index(concept) for concept in study_concepts]
         reduced_U = U[indices]
         if self.is_associative():
-            doc_rows = divisi2.aligned_matrix_multiply(document_matrix.normalize_rows(), reduced_U)
+            doc_rows = divisi2.aligned_matrix_multiply(document_matrix, reduced_U)
             projections = reduced_U.extend(doc_rows)
         else:
             doc_indices = [V.row_index(doc.name)
@@ -351,6 +353,9 @@ class Study(QtCore.QObject):
             core = centrality.top_items(len(centrality)-1)
             core = [c[0] for c in core
                     if c[0] in concept_sums.labels][:40]
+            fringe = (-centrality).top_items(len(centrality)-1)
+            fringe = [c[0] for c in fringe
+                      if c[0] in concept_sums.labels][:40]
 
             c_centrality = {}
             c_correlation = {}
@@ -380,6 +385,7 @@ class Study(QtCore.QObject):
             'correlation': c_correlation,
             'key_concepts': key_concepts,
             'core': core,
+            'fringe': fringe,
             'timestamp': list(time.localtime())
         }
     
@@ -436,6 +442,13 @@ class StudyResults(QtCore.QObject):
             out.write(self.info)
         return self.info
 
+    def write_core(self, filename):
+        if self.stats is None: return
+        with open(filename, 'w') as out:
+            for concept in self.stats['core']:
+                out.write(concept+', ')
+            out.write('\n')
+
     def get_consistency(self):
         return self.stats['consistency']
 
@@ -486,6 +499,7 @@ class StudyResults(QtCore.QObject):
         self.study._step('Writing reports...')
         # Save stats
         write_json_to_file(self.stats, tgt("stats.json"))
+        self.write_core(tgt("core.txt"))
         self.write_report(tgt("report.html"))
 
         # Save input contents hash to know if the study has changed.
