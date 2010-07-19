@@ -1,3 +1,4 @@
+from __future__ import with_statement
 """
 This class provides the model to SVDView's view, calculating a blend of all
 the components of a study that it finds in the filesystem.
@@ -175,10 +176,11 @@ class Study(QtCore.QObject):
             return self._documents_matrix
         entries = []
         for doc in self.documents:
-            for concept, value in doc.extract_concepts_with_negation():
+            self._step(doc.name)
+            for concept, value in doc.extract_concepts_with_negation()[:100]:
                 if (concept not in PUNCTUATION) and (not en_nl.is_blacklisted(concept)):
                     entries.append((value, doc.name, concept))
-        self._documents_matrix = divisi2.make_sparse(entries)
+        self._documents_matrix = divisi2.make_sparse(entries).normalize_tfidf(cols_are_terms=True)
         return self._documents_matrix
     
     def get_documents_assoc(self):
@@ -187,27 +189,29 @@ class Study(QtCore.QObject):
         docs = self.get_documents_matrix()
         concept_counts = docs.col_op(len)
         valid_concepts = set()
+
+        # NOTE: this is the number you change to make a study larger or
+        # smaller.
         for concept, count in concept_counts.to_sparse().named_items():
             if count >= 3: valid_concepts.add(concept)
 
         entries = []
         for doc in self.study_documents:
-            concepts = doc.extract_concepts_with_negation()[:100]
-            for concept1, value1 in concepts:
-                if concept1 in valid_concepts:
-                    for concept2, value2 in concepts:
-                        if concept2 in valid_concepts and concept1 != concept2:
-                            entries.append( (value1*value2/2, concept1, concept2) )
-                            entries.append( (value1*value2/2, concept2, concept1) )
+            prev_concepts = []
             for sentence in doc.get_sentences():
-                # avoid insane space usage by limiting to 100 words
-                concepts = extract_concepts_from_words(sentence[:100])
+                # avoid insane space usage by limiting to 20 words
+                concepts = extract_concepts_from_words(sentence[:20])
                 for concept1, value1 in concepts:
                     if concept1 in valid_concepts:
                         for concept2, value2 in concepts:
-                            if concept2 in valid_concepts and concept1 != concept2:
+                            if concept2 in valid_concepts and concept1 < concept2:
                                 entries.append( (value1*value2, concept1, concept2) )
                                 entries.append( (value1*value2, concept2, concept1) )
+                        for concept2, value2 in prev_concepts:
+                            if concept2 in valid_concepts and concept1 != concept2:
+                                entries.append( (value1*value2/2, concept1, concept2) )
+                                entries.append( (value1*value2/2, concept2, concept1) )
+                prev_concepts = concepts
         return divisi2.SparseMatrix.square_from_named_entries(entries).squish()
     
     def get_blend(self):
@@ -330,6 +334,7 @@ class Study(QtCore.QObject):
             reference_mean = np.mean(assoc_list)
             reference_stdev = np.std(assoc_list)
             reference_stderr = reference_stdev / len(doc_indices)
+
             consistency = reference_mean / reference_stderr
 
             ztest_stderr = reference_stdev / np.sqrt(len(doc_indices))
@@ -338,14 +343,14 @@ class Study(QtCore.QObject):
             all_means = np.mean(all_assoc, axis=1)
             all_stdev = np.std(all_assoc, axis=1)
             all_stderr = all_stdev / np.sqrt(len(doc_indices))
+            
             centrality = divisi2.DenseVector((all_means - reference_mean) /
               ztest_stderr, spectral.row_labels)
             correlation = divisi2.DenseVector(all_means / ztest_stderr,
               spectral.row_labels)
-            core = centrality.top_items(100)
+            core = centrality.top_items(len(centrality)-1)
             core = [c[0] for c in core
-                    if c[0] in concept_sums.labels
-                    and concept_sums.entry_named(c[0]) >= 2][:10]
+                    if c[0] in concept_sums.labels][:40]
 
             c_centrality = {}
             c_correlation = {}
@@ -360,9 +365,9 @@ class Study(QtCore.QObject):
                 c_centrality[doc.name] = centrality.entry_named(doc.name)
                 c_correlation[doc.name] = correlation.entry_named(doc.name)
                 docvec = np.maximum(0, spectral.row_named(doc.name)[sdoc_indices])
-                docvec /= (0.00001 + np.sum(docvec))
+                docvec /= (0.0001 + np.sum(docvec))
                 keyvec = divisi2.aligned_matrix_multiply(docvec, doc_occur)
-                interesting = keyvec / baseline
+                interesting = keyvec #/ baseline
                 key_concepts[doc.name] = []
                 for key, val in interesting.top_items(5):
                     key_concepts[doc.name].append((key, keyvec.entry_named(key)))
@@ -652,12 +657,14 @@ class StudyDirectory(QtCore.QObject):
             print "Skipping outdated analysis."
             return None
 
-def test():
-    study = StudyDirectory('../ThaiFoodStudy')
+def test(dirname):
+    study = StudyDirectory(dirname)
     study.analyze()
 
+import sys
 if __name__ == '__main__':
     DO_PROFILE=False
+    logging.basicConfig(level=logging.INFO)
     if DO_PROFILE:
         import cProfile as profile
         import pstats
@@ -665,6 +672,9 @@ if __name__ == '__main__':
         p = pstats.Stats('study.profile')
         p.sort_stats('time').print_stats(50)
     else:
-        test()
+        if len(sys.argv) > 1:
+            test(sys.argv[1])
+        else:
+            test('../ThaiFoodStudy')
 
 
