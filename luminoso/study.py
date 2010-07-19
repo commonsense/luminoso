@@ -179,7 +179,7 @@ class Study(QtCore.QObject):
             for concept, value in doc.extract_concepts_with_negation()[:100]:
                 if (concept not in PUNCTUATION) and (not en_nl.is_blacklisted(concept)):
                     entries.append((value, doc.name, concept))
-        self._documents_matrix = divisi2.make_sparse(entries)
+        self._documents_matrix = divisi2.make_sparse(entries).normalize_tfidf()
         return self._documents_matrix
     
     def get_documents_assoc(self):
