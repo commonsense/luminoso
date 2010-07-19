@@ -347,9 +347,8 @@ class Study(QtCore.QObject):
               ztest_stderr, spectral.row_labels)
             correlation = divisi2.DenseVector(all_means / ztest_stderr,
               spectral.row_labels)
-            core = centrality.top_items(100)
-            core = [c[0] for c in core
-                    if c[0] in concept_sums.labels][:10]
+            core = centrality.top_items(len(centrality)-1)
+            core = [c[0] for c in core][:20]
 
             c_centrality = {}
             c_correlation = {}
