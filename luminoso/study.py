@@ -180,7 +180,7 @@ class Study(QtCore.QObject):
             for concept, value in doc.extract_concepts_with_negation()[:100]:
                 if (concept not in PUNCTUATION) and (not en_nl.is_blacklisted(concept)):
                     entries.append((value, doc.name, concept))
-        self._documents_matrix = divisi2.make_sparse(entries).normalize_tfidf()
+        self._documents_matrix = divisi2.make_sparse(entries).normalize_tfidf(cols_are_terms=True)
         return self._documents_matrix
     
     def get_documents_assoc(self):
@@ -364,9 +364,9 @@ class Study(QtCore.QObject):
                 c_centrality[doc.name] = centrality.entry_named(doc.name)
                 c_correlation[doc.name] = correlation.entry_named(doc.name)
                 docvec = np.maximum(0, spectral.row_named(doc.name)[sdoc_indices])
-                docvec /= (0.00001 + np.sum(docvec))
+                docvec /= (0.0001 + np.sum(docvec))
                 keyvec = divisi2.aligned_matrix_multiply(docvec, doc_occur)
-                interesting = keyvec / baseline
+                interesting = keyvec #/ baseline
                 key_concepts[doc.name] = []
                 for key, val in interesting.top_items(5):
                     key_concepts[doc.name].append((key, keyvec.entry_named(key)))
