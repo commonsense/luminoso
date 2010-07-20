@@ -1,8 +1,9 @@
 import csv
+import os
 
-#Path to the csv document.
-path = 'C:/Users/Rafael/Desktop/luminoso/luminoso/tests/CFB_Cities/Arlington.csv'
-##path = 'C:/Users/Rafael/Desktop/luminoso/luminoso/tests/001-866.csv'
+#Files should be in the same directory as this script. User should write file name bellow.
+file_name = '001-866.csv'
+##file_name = '/CFB_Cities/Arlington.csv'
     
 def create_file(path, counter, stored_values):
     '''
@@ -56,19 +57,23 @@ def clear_tag(str):
     #Note: Add any other code to remove unwanted format here.
     return str.replace('\n', '').replace('?', '')
 
-def open_csv_file(path):
+def open_csv_file(file_name):
     '''
     Main method. Here the csv file is opened and the helper functions are used to make sense of it.
     The code is documented every other step.
     '''
+    
+    path = os.path.abspath('.ssh/../'+file_name)
+    
     csv_file = csv.reader(open(path, "U"))
     #First find the tags (tags should be located near the top of the ducument).
     #Documents may have titles in the 1st line.
     tags, tag_len = find_tags(csv_file)
 
     #Path to the folder the study should be saved in.
-    study_path = 'C:/Users/Rafael/Desktop/luminoso/luminoso/tests/CFB_Cities/Study/'
-##    study_path = 'C:/Users/Rafael/Desktop/luminoso/luminoso/tests/csv_test/'
+    study_path = os.path.abspath('.ssh/../Study/')
+##    study_path = 'C:/Users/Rafael/Desktop/CSV_Files/CFB_Cities/Study/'
+##    study_path = 'C:/Users/Rafael/Desktop/CSV_Files/csv_test/'
 
     #Store values.
     counter = 1
@@ -78,14 +83,15 @@ def open_csv_file(path):
             tags[tags.keys()[tag_len%1]].extend([row[i]])
             
         #Create Files.
-        create_file(study_path+'Documents/', counter, row)
+        create_file(study_path+'\\Documents\\', counter, row)
         counter += 1
                 
     #Create Canonical Document of tags.
-    f = open(study_path+'Canonical/Tags.txt', 'w')
+    f = open(study_path+'\\Canonical\\Tags.txt', 'w')
     #Add the Documents tags to the tag file.
     for tag in tags.keys():
-        f.write(tag+'\n')
+        
+        f.write(tag.replace(' ','_')+'\n')
         #Now look at the words located bellow the tagged column and look for possible
         #canonical words.
         collumn = tags[tag]
@@ -93,8 +99,8 @@ def open_csv_file(path):
         while i < len(collumn):
             if collumn[i].lower() == 'yes' or collumn[i].lower() == 'no':
                 #Yes or No answer, thus we want positive and negative tags.
-                f.write(tag+'_yes\n')
-                f.write('-'+tag+'_no\n')
+                f.write(tag.replace(' ','_')+'_yes\n')
+                f.write('-'+tag.replace(' ','_')+'_no\n')
                 break
             elif collumn.count(collumn[i]) <= 2:
                 if len(collumn[i]) > 2:
@@ -108,11 +114,11 @@ def open_csv_file(path):
                 #If it's repeated enough then make it a tag. Always getting rid of the empty items
                 #first.
                 if collumn[i] != '' and collumn[i] != ' ':
-                    f.write(tag+'_'+collumn[i]+'\n')
+                    f.write(tag.replace(' ','_')+'_'+collumn[i]+'\n')
                 i += collumn.count(collumn[i])
                 
     f.close()
 
 
 if __name__ == '__main__':
-    open_csv_file(path)
+    open_csv_file(file_name)
