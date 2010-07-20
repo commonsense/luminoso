@@ -29,8 +29,8 @@ from luminoso.report import render_info_page, default_info_page
 
 import shutil
 
-# FIXME: make this configurable per study
-# Making it false right now because it screws up all the statistics.
+# Warning: SUBTRACT_MEAN might screw up statistics. We don't really know 
+# what is going on.
 SUBTRACT_MEAN = False
 
 try:
@@ -169,6 +169,8 @@ class Study(QtCore.QObject):
 
         This is temporarily cached (besides what StudyDir does) because it
         will be needed multiple times in analyzing a study.
+
+        FIXME: try to make canonical documents not change the results
         """
         self._step('Building document matrix...')
         if self.num_documents == 0:
@@ -177,12 +179,23 @@ class Study(QtCore.QObject):
         if self._documents_matrix is not None:
             return self._documents_matrix
         entries = []
-        for doc in self.documents:
+        for doc in self.study_documents:
             self._step(doc.name)
             for concept, value in doc.extract_concepts_with_negation()[:100]:
                 if (concept not in PUNCTUATION) and (not en_nl.is_blacklisted(concept)):
                     entries.append((value, doc.name, concept))
-        self._documents_matrix = divisi2.make_sparse(entries).normalize_tfidf(cols_are_terms=True)
+        documents_matrix = divisi2.make_sparse(entries).normalize_tfidf(cols_are_terms=True)
+        canon_entries = []
+        for doc in self.canonical_documents:
+            self._step(doc.name)
+            for concept, value in doc.extract_concepts_with_negation()[:1000]:
+                if (concept not in PUNCTUATION) and (not en_nl.is_blacklisted(concept)):
+                    canon_entries.append((value, doc.name, concept))
+        if canon_entries:
+            canonical_matrix = divisi2.make_sparse(canon_entries).normalize_rows()
+            self._documents_matrix = documents_matrix + canonical_matrix
+        else:
+            self._documents_matrix = documents_matrix
         return self._documents_matrix
     
     def get_documents_assoc(self):
@@ -295,11 +308,12 @@ class Study(QtCore.QObject):
                            if doc.name in V.row_labels]
             projections = reduced_U.extend(V[doc_indices])
         
+        #if SUBTRACT_MEAN:
+        #    sdoc_indices = [projections.row_index(doc.name) for doc in
+        #    self.study_documents if doc.name in projections.row_labels]
+        #    projections -= np.asarray(projections[sdoc_indices]).mean(axis=0)
         if SUBTRACT_MEAN:
-            sdoc_indices = [projections.row_index(doc.name) for doc in
-            self.study_documents if doc.name in projections.row_labels]
-            projections -= projections[sdoc_indices].mean(axis=0)
-
+            projections -= np.asarray(projections).mean(axis=0)
 
         return document_matrix, projections, Sigma
 
@@ -352,10 +366,8 @@ class Study(QtCore.QObject):
               spectral.row_labels)
             core = centrality.top_items(len(centrality)-1)
             core = [c[0] for c in core
-                    if c[0] in concept_sums.labels][:40]
-            fringe = (-centrality).top_items(len(centrality)-1)
-            fringe = [c[0] for c in fringe
-                      if c[0] in concept_sums.labels][:40]
+                    if c[0] in concept_sums.labels
+                    and c[1] > .001]
 
             c_centrality = {}
             c_correlation = {}
@@ -385,7 +397,6 @@ class Study(QtCore.QObject):
             'correlation': c_correlation,
             'key_concepts': key_concepts,
             'core': core,
-            'fringe': fringe,
             'timestamp': list(time.localtime())
         }
     
