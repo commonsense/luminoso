@@ -55,7 +55,6 @@ arranged = np.zeros((20, 20))
 for row in xrange(20):
     for col in xrange(20):
         arranged[row,col] = ary[row_order[row][1], col_order[col][1]]
-
 yticks(arange(20)+0.5, [ro[0] for ro in row_order])
 xticks(arange(20)+0.5, [co[0] for co in col_order], rotation='vertical')
 pcolor(arranged, cmap='hot')
