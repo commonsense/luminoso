@@ -1,5 +1,6 @@
 import numpy as np
 from pylab import *
+from scipy.stats import ttest_rel
 import pickle
 
 row_order = [
@@ -30,7 +31,7 @@ col_order = [
   ('space', 14),
   ('cryptography', 11),
   ('electronics', 12),
-  ('image', 1),
+  ('graphics', 1),
   ('windows', 2),
   ('pc', 3),
   ('mac', 4),
@@ -43,23 +44,48 @@ col_order = [
   ('gun', 16),
   ('middle east', 17),
   ('politics', 18),
-  ('atheist', 0),
-  ('christian', 15),
+  ('atheism', 0),
+  ('christianity', 15),
   ('religion', 19)
 ]
 
-ary = pickle.load(open('central.pickle'))
+figure(1)
+ary = pickle.load(open('centrality.pickle'))
 row_order = row_order[::-1]
-
+sense_diffs = []
 arranged = np.zeros((20, 20))
 for row in xrange(20):
     for col in xrange(20):
         arranged[row,col] = ary[row_order[row][1], col_order[col][1]]
+        if row != col: sense_diffs.append(arranged[row,row]-arranged[row,col])
 yticks(arange(20)+0.5, [ro[0] for ro in row_order])
 xticks(arange(20)+0.5, [co[0] for co in col_order], rotation='vertical')
 pcolor(arranged, cmap='hot')
-subplots_adjust(bottom=0.2, left=0.3)
-cbar = colorbar()
+title('Topic alignment with common sense')
+subplots_adjust(bottom=0.22, left=0.3)
+clim(-60, 10)
+cbar = colorbar(ticks=[-60, -50, -40, -30, -20, -10, 0, 10])
 cbar.set_label('Centrality')
+
+figure(2)
+ary = pickle.load(open('nosense.centrality.pickle'))
+
+arranged = np.zeros((20, 20))
+no_sense_diffs = []
+for row in xrange(20):
+    for col in xrange(20):
+        arranged[row,col] = ary[row_order[row][1], col_order[col][1]]
+        if row != col: no_sense_diffs.append(arranged[row,row]-arranged[row,col])
+yticks(arange(20)+0.5, [ro[0] for ro in row_order])
+xticks(arange(20)+0.5, [co[0] for co in col_order], rotation='vertical')
+pcolor(arranged, cmap='hot')
+title('Topic alignment without common sense')
+subplots_adjust(bottom=0.22, left=0.3)
+clim(-60, 10)
+cbar = colorbar(ticks=[-60, -50, -40, -30, -20, -10, 0, 10])
+cbar.set_label('Centrality')
+
+print np.mean(sense_diffs), np.mean(no_sense_diffs)
+print ttest_rel(no_sense_diffs, sense_diffs)
 show()
 
