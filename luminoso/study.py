@@ -384,6 +384,8 @@ class Study(QtCore.QObject):
                 docvec = np.maximum(0, spectral.row_named(doc.name)[sdoc_indices])
                 docvec /= (0.0001 + np.sum(docvec))
                 keyvec = divisi2.aligned_matrix_multiply(docvec, doc_occur)
+                assert not any(np.isnan(keyvec))
+                assert not any(np.isinf(keyvec))
                 interesting = keyvec #/ baseline
                 key_concepts[doc.name] = []
                 for key, val in interesting.top_items(5):

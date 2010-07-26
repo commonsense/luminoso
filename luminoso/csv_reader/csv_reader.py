@@ -113,7 +113,7 @@ def open_csv_file(file_name):
     len_col = len(tags[tags.keys()[0]])
     
     #Create Canonical Document of tags.
-    f = open(study_path+'\\Canonical\\Tags.txt', 'w')
+    f = open(study_path+os.sep+'Canonical'+os.sep+'Tags.txt', 'w')
     
     #tags dictionary should not be altered as it will be used later on, so we make a copy here.
     copy_tags = {}.fromkeys(tags.keys())
@@ -186,7 +186,7 @@ def open_csv_file(file_name):
                 r.extend([replacement_tags[tag][item]])
             else:
                 r.extend([item])
-        create_file(study_path+'\\Documents\\', counter, r)
+        create_file(study_path+os.sep+'Documents'+os.sep, counter, r)
         counter += 1
         r = []
         
