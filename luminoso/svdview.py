@@ -655,7 +655,7 @@ class SVDViewer(QWidget):
     def make_svdview(matrix, svdmatrix, magnitudes=None, canonical=None):
         widget = SVDViewer(svdmatrix, svdmatrix.row_labels)
         if magnitudes is None:
-        	magnitudes = np.array([np.linalg.mag(vec) for vec in svdmatrix])
+        	magnitudes = np.array([np.linalg.norm(vec) for vec in svdmatrix])
         widget.magnitudes = magnitudes
         widget.setup_standard_layers()
         widget.set_default_axes()
