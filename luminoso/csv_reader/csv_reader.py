@@ -4,13 +4,6 @@ from luminoso import study
 
 '''
 This script allows for users to input CSV files and convert them into luminoso ready study files.
-There are some premises that need to be complied for the program to run properly:
-    - The user must include a Study folder in the same directory this script is saved in.
-        - This folder should contain subfolders, namely Canonical, Documents, Results and
-        Matrices folders inside.
-    - The CSV file will probably have tags or topic names at the top (tags usually
-    describe the contents of the collumn). Tags should not be repeated. This will cause
-    script to give an error as it assumes each collumns has a unique tag.
 '''
 class CSVFile(object):
     '''
@@ -93,14 +86,24 @@ class CSVReader():
                     #If max_count wasn't surpased by the current count, we asume that we had found the
                     #tags in the previous row and return it.
                     elif max_count >= count and max_count > 0:
-                        dict_tags = {}.fromkeys(temp_tags)
+                        dict_tags_doc = {}
+                        dict_tags_calc = {}
+                        c = 0
                         for i in temp_tags:
-                            dict_tags[i] = []
-                        dict_tags['order'] = temp_tags
+                            if i in dict_tags_doc.keys():
+                                dict_tags_doc[i+'repeated'+str(c)] = []
+                                c += 1
+                            else:
+                                dict_tags_doc[i] = []
+                            dict_tags_calc[i] = []
+                        dict_tags_doc['order'] = temp_tags
                         #The script checks one line in advance to make sure this is in fact the row
                         #containing tags and thus we need to include it.
                         skipped_row = row
-                        return dict_tags, max_count, skipped_row
+                        #Returns a dict with to be used to recreate txt files (dict_tags_doc) and
+                        #another dict to calculate tags and other useful info (dict_tags_calc). We
+                        #do this because for one order matters and the other can be disposed of.
+                        return dict_tags_doc, max_count, skipped_row, dict_tags_calc
                     break
                 else:
                     tags.extend(['#'+self.clear_tag(row[item])])
@@ -120,8 +123,7 @@ class CSVReader():
         
         #First find the tags (tags should be located near the top of the ducument).
         #Documents may have titles in the 1st line.
-        tags, tag_len, skipped_row = self.find_tags(csv_file)
-
+        tags, tag_len, skipped_row, tags_calc = self.find_tags(csv_file)
 
         #Path to the folder the study should be saved in.
         study_path = self.csv_file.path
@@ -129,10 +131,18 @@ class CSVReader():
         #The document may contain other possible tags or key words and we need to find them.
         pointer = 0
         for x in skipped_row[:tag_len]:
+            if tags['order'][pointer%tag_len].find('repeated'):
+                tags_calc[tags['order'][pointer%tag_len].split('repeated')[0]].extend([x])
+            else:
+                tags_calc[tags['order'][pointer%tag_len]].extend([x])
             tags[tags['order'][pointer%tag_len]].extend([x])
             pointer += 1
         for row in csv_file:
             for j in row[:tag_len]:
+                if tags['order'][pointer%tag_len].find('repeated'):
+                    tags_calc[tags['order'][pointer%tag_len].split('repeated')[0]].extend([x])
+                else:
+                    tags_calc[tags['order'][pointer%tag_len]].extend([x])
                 tags[tags['order'][pointer%tag_len]].extend([j])
                 pointer += 1
                 
@@ -148,21 +158,15 @@ class CSVReader():
         #Create Canonical Document of tags.
         f = open(self.csv_file.canonical_path()+os.sep+'Tags.txt', 'w')
         
-        #tags dictionary should not be altered as it will be used later on, so we make a copy here.
-        copy_tags = {}.fromkeys(tags.keys())
-        for y in copy_tags.keys():
-            copy_tags[y] = []
-            copy_tags[y].extend(tags[y])
-        
         #Add the Documents tags to the tag file.
-        for tag in copy_tags.keys():
+        for tag in tags_calc.keys():
             if tag == 'order':
                 continue
             f.write(tag.replace(' ','_')+'\n')
             
             #Now look at the words located bellow the tagged column and look for possible
             #canonical words.
-            collumn = copy_tags[tag]
+            collumn =tags_calc[tag]
             collumn.sort()
             i = 0
 
@@ -191,11 +195,11 @@ class CSVReader():
                     #first.
                     if collumn[i] != '' and collumn[i] != ' ':
                         #If we already added it, then ignore it.
-                        if tag.replace(' ','_')+'_'+collumn[i].replace(' ','_') in copy_tags:
+                        if tag.replace(' ','_')+'_'+collumn[i].replace(' ','_') in tags_calc:
                             i += collumn.count(collumn[i])
                             continue
                         #We add new tags here so that they are not repeated.
-                        copy_tags[tag.replace(' ','_')+'_'+collumn[i].replace(' ','_')] = []
+                        tags_calc[tag.replace(' ','_')+'_'+collumn[i].replace(' ','_')] = []
                         #This is the new accepted tag.
                         new_tag = tag.replace(' ','_')+'_'+collumn[i].replace(' ','_')
                         if replacement_tags[tag] == []:
@@ -212,15 +216,25 @@ class CSVReader():
         #creates a text document with the list's contents.
         counter = 0
         r = []
-        while counter < len_col-1:
+        while counter < len_col:
             for tag in tags['order']:
+                if len(tags[tag]) == 0:
+                    continue
                 item = tags[tag][counter]
                 if item in replacement_tags[tag]:
                     r.extend([replacement_tags[tag][item]])
                 else:
                     r.extend([item])
+            print r
             self.create_file(counter, r)
             counter += 1
             r = []
             
         f.close()
+
+##The script can run automatically by uncommenting the code bellow and giving it a path in place
+##of the "user_inputted_path".
+##if __name__ == '__main__':
+##    csv_file = CSVFile(user_inputted_path)
+##    reader = CSVReader(csv_file)
+##    reader.read_csv()
