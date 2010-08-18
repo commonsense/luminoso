@@ -16,7 +16,7 @@ def render_info_page(results):
         return ""
     key_concepts = {}
     for key, values in results.stats['key_concepts'].items():
-        kstr = ["%s (%d%%)" % (concept.encode('utf-8'), value*100)
+        kstr = ["%s (%d%%)" % (concept.encode('utf-8'), float(value*100))
                 for concept, value in values]
         key_concepts[key] = kstr
     core = results.stats['core']

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-VERSION = "1.2.0"
+VERSION = "1.2.1"
 
 from setuptools import setup, find_packages
 import os.path, sys
@@ -66,3 +66,19 @@ setup(
 
     entry_points={'gui_scripts': ['luminoso = luminoso.run_luminoso:main']},
 )
+
+'''
+Add the icons directory to the build.
+'''
+import shutil
+
+#Create paths. One that points to the icons directory and one that creates
+#the disired place to copy to.
+srcPath = os.path.abspath('.ssh/../icons')
+targPath = os.path.abspath('.ssh/../dist/icons')
+
+#Make sure the icons directory exists and that it has not been added to the build
+#yet.
+if os.path.exists(srcPath) and (not os.path.exists(targPath)):
+    shutil.copytree(srcPath,targPath)
+

@@ -365,8 +365,8 @@ class LabelLayer(Layer):
 
             # Mask out areas that already have label text.
             dist = self.distances[lindex]
-            width = int(dist/2) + 16
-            height = int(dist/8) + 4
+            width = int(dist/4) + 16
+            height = int(dist/16) + 4
             xmin = max(x-width, 0)
             xmax = min(x+width, self.luminoso.width)
             ymin = max(y-height, 0)
@@ -654,10 +654,15 @@ class SVDViewer(QWidget):
     @staticmethod
     def make_svdview(matrix, svdmatrix, magnitudes=None, canonical=None):
         widget = SVDViewer(svdmatrix, svdmatrix.row_labels)
+        if magnitudes is None:
+        	magnitudes = np.array([np.linalg.norm(vec) for vec in svdmatrix])
         widget.magnitudes = magnitudes
         widget.setup_standard_layers()
         widget.set_default_axes()
         if canonical is None: canonical = []
+        for c in canonical:
+            svdmatrix[svdmatrix.row_index(c)] *= 4
+            magnitudes[svdmatrix.row_index(c)] *= 8
         widget.insert_layer(1, CanonicalLayer, canonical)
         widget.insert_layer(2, LinkLayer, matrix)
         return widget

@@ -1,3 +1,4 @@
+from __future__ import with_statement
 """
 This class provides the model to SVDView's view, calculating a blend of all
 the components of a study that it finds in the filesystem.
@@ -28,8 +29,8 @@ from luminoso.report import render_info_page, default_info_page
 
 import shutil
 
-# FIXME: make this configurable per study
-# Making it false right now because it screws up all the statistics.
+# Warning: SUBTRACT_MEAN might screw up statistics. We don't really know 
+# what is going on.
 SUBTRACT_MEAN = False
 
 try:
@@ -168,17 +169,33 @@ class Study(QtCore.QObject):
 
         This is temporarily cached (besides what StudyDir does) because it
         will be needed multiple times in analyzing a study.
+
+        FIXME: try to make canonical documents not change the results
         """
         self._step('Building document matrix...')
-        if self.num_documents == 0: return None
+        if self.num_documents == 0:
+            assert False
+            return None
         if self._documents_matrix is not None:
             return self._documents_matrix
         entries = []
-        for doc in self.documents:
-            for concept, value in doc.extract_concepts_with_negation():
+        for doc in self.study_documents:
+            self._step(doc.name)
+            for concept, value in doc.extract_concepts_with_negation()[:100]:
                 if (concept not in PUNCTUATION) and (not en_nl.is_blacklisted(concept)):
                     entries.append((value, doc.name, concept))
-        self._documents_matrix = divisi2.make_sparse(entries)
+        documents_matrix = divisi2.make_sparse(entries).normalize_tfidf(cols_are_terms=True)
+        canon_entries = []
+        for doc in self.canonical_documents:
+            self._step(doc.name)
+            for concept, value in doc.extract_concepts_with_negation()[:1000]:
+                if (concept not in PUNCTUATION) and (not en_nl.is_blacklisted(concept)):
+                    canon_entries.append((value, doc.name, concept))
+        if canon_entries:
+            canonical_matrix = divisi2.make_sparse(canon_entries).normalize_rows()
+            self._documents_matrix = documents_matrix + canonical_matrix
+        else:
+            self._documents_matrix = documents_matrix
         return self._documents_matrix
     
     def get_documents_assoc(self):
@@ -187,27 +204,29 @@ class Study(QtCore.QObject):
         docs = self.get_documents_matrix()
         concept_counts = docs.col_op(len)
         valid_concepts = set()
+
+        # NOTE: this is the number you change to make a study larger or
+        # smaller.
         for concept, count in concept_counts.to_sparse().named_items():
             if count >= 3: valid_concepts.add(concept)
 
         entries = []
         for doc in self.study_documents:
-            concepts = doc.extract_concepts_with_negation()[:100]
-            for concept1, value1 in concepts:
-                if concept1 in valid_concepts:
-                    for concept2, value2 in concepts:
-                        if concept2 in valid_concepts and concept1 != concept2:
-                            entries.append( (value1*value2/2, concept1, concept2) )
-                            entries.append( (value1*value2/2, concept2, concept1) )
+            prev_concepts = []
             for sentence in doc.get_sentences():
-                # avoid insane space usage by limiting to 100 words
-                concepts = extract_concepts_from_words(sentence[:100])
+                # avoid insane space usage by limiting to 20 words
+                concepts = extract_concepts_from_words(sentence[:20])
                 for concept1, value1 in concepts:
                     if concept1 in valid_concepts:
                         for concept2, value2 in concepts:
-                            if concept2 in valid_concepts and concept1 != concept2:
+                            if concept2 in valid_concepts and concept1 < concept2:
                                 entries.append( (value1*value2, concept1, concept2) )
                                 entries.append( (value1*value2, concept2, concept1) )
+                        for concept2, value2 in prev_concepts:
+                            if concept2 in valid_concepts and concept1 != concept2:
+                                entries.append( (value1*value2/2, concept1, concept2) )
+                                entries.append( (value1*value2/2, concept2, concept1) )
+                prev_concepts = concepts
         return divisi2.SparseMatrix.square_from_named_entries(entries).squish()
     
     def get_blend(self):
@@ -281,7 +300,7 @@ class Study(QtCore.QObject):
         indices = [U.row_index(concept) for concept in study_concepts]
         reduced_U = U[indices]
         if self.is_associative():
-            doc_rows = divisi2.aligned_matrix_multiply(document_matrix.normalize_rows(), reduced_U)
+            doc_rows = divisi2.aligned_matrix_multiply(document_matrix, reduced_U)
             projections = reduced_U.extend(doc_rows)
         else:
             doc_indices = [V.row_index(doc.name)
@@ -289,11 +308,12 @@ class Study(QtCore.QObject):
                            if doc.name in V.row_labels]
             projections = reduced_U.extend(V[doc_indices])
         
+        #if SUBTRACT_MEAN:
+        #    sdoc_indices = [projections.row_index(doc.name) for doc in
+        #    self.study_documents if doc.name in projections.row_labels]
+        #    projections -= np.asarray(projections[sdoc_indices]).mean(axis=0)
         if SUBTRACT_MEAN:
-            sdoc_indices = [projections.row_index(doc.name) for doc in
-            self.study_documents if doc.name in projections.row_labels]
-            projections -= projections[sdoc_indices].mean(axis=0)
-
+            projections -= np.asarray(projections).mean(axis=0)
 
         return document_matrix, projections, Sigma
 
@@ -330,6 +350,7 @@ class Study(QtCore.QObject):
             reference_mean = np.mean(assoc_list)
             reference_stdev = np.std(assoc_list)
             reference_stderr = reference_stdev / len(doc_indices)
+
             consistency = reference_mean / reference_stderr
 
             ztest_stderr = reference_stdev / np.sqrt(len(doc_indices))
@@ -338,14 +359,15 @@ class Study(QtCore.QObject):
             all_means = np.mean(all_assoc, axis=1)
             all_stdev = np.std(all_assoc, axis=1)
             all_stderr = all_stdev / np.sqrt(len(doc_indices))
+            
             centrality = divisi2.DenseVector((all_means - reference_mean) /
               ztest_stderr, spectral.row_labels)
             correlation = divisi2.DenseVector(all_means / ztest_stderr,
               spectral.row_labels)
-            core = centrality.top_items(100)
+            core = centrality.top_items(len(centrality)-1)
             core = [c[0] for c in core
                     if c[0] in concept_sums.labels
-                    and concept_sums.entry_named(c[0]) >= 2][:10]
+                    and c[1] > .001]
 
             c_centrality = {}
             c_correlation = {}
@@ -360,9 +382,11 @@ class Study(QtCore.QObject):
                 c_centrality[doc.name] = centrality.entry_named(doc.name)
                 c_correlation[doc.name] = correlation.entry_named(doc.name)
                 docvec = np.maximum(0, spectral.row_named(doc.name)[sdoc_indices])
-                docvec /= (0.00001 + np.sum(docvec))
+                docvec /= (0.0001 + np.sum(docvec))
                 keyvec = divisi2.aligned_matrix_multiply(docvec, doc_occur)
-                interesting = keyvec / baseline
+                assert not any(np.isnan(keyvec))
+                assert not any(np.isinf(keyvec))
+                interesting = keyvec #/ baseline
                 key_concepts[doc.name] = []
                 for key, val in interesting.top_items(5):
                     key_concepts[doc.name].append((key, keyvec.entry_named(key)))
@@ -431,6 +455,13 @@ class StudyResults(QtCore.QObject):
             out.write(self.info)
         return self.info
 
+    def write_core(self, filename):
+        if self.stats is None: return
+        with open(filename, 'w') as out:
+            for concept in self.stats['core']:
+                out.write(concept+', ')
+            out.write('\n')
+
     def get_consistency(self):
         return self.stats['consistency']
 
@@ -481,6 +512,7 @@ class StudyResults(QtCore.QObject):
         self.study._step('Writing reports...')
         # Save stats
         write_json_to_file(self.stats, tgt("stats.json"))
+        self.write_core(tgt("core.txt"))
         self.write_report(tgt("report.html"))
 
         # Save input contents hash to know if the study has changed.
@@ -652,12 +684,14 @@ class StudyDirectory(QtCore.QObject):
             print "Skipping outdated analysis."
             return None
 
-def test():
-    study = StudyDirectory('../ThaiFoodStudy')
+def test(dirname):
+    study = StudyDirectory(dirname)
     study.analyze()
 
+import sys
 if __name__ == '__main__':
     DO_PROFILE=False
+    logging.basicConfig(level=logging.INFO)
     if DO_PROFILE:
         import cProfile as profile
         import pstats
@@ -665,6 +699,9 @@ if __name__ == '__main__':
         p = pstats.Stats('study.profile')
         p.sort_stats('time').print_stats(50)
     else:
-        test()
+        if len(sys.argv) > 1:
+            test(sys.argv[1])
+        else:
+            test('../ThaiFoodStudy')
 
 
