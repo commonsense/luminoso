@@ -225,7 +225,6 @@ class CSVReader():
                     r.extend([replacement_tags[tag][item]])
                 else:
                     r.extend([item])
-            print r
             self.create_file(counter, r)
             counter += 1
             r = []
