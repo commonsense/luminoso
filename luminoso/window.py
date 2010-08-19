@@ -177,12 +177,12 @@ class MainWindow(QtGui.QMainWindow):
         csv_file = QtGui.QFileDialog.getOpenFileNames(None,"Select a CSV File to open.","/home")
         filename = csv_file[0]
         if filename != None and filename.endsWith(QtCore.QString('.csv')):
+            self.ui.show_info("<h3>Creating Study...</h3><p>Study being located at "
+                              +str(csv.study_path)+"</p><p>(this may take a few minutes)</p>")
             csv = CSVFile(unicode(filename))
             reader = CSVReader(csv)
             reader.read_csv()
             self.load_study(unicode(csv.study_path))
-            self.ui.show_info("<h3>Creating Study...</h3><p>Study being located at "
-                              +str(csv.study_path)+"</p><p>(this may take a few minutes)</p>")
             
 ##        else:
 ##            print "Please enter a valid CSV File."
