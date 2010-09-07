@@ -155,14 +155,15 @@ class CSVReader():
         #Length of the collumns.
         len_col = len(tags[tags.keys()[0]])
         
-        #Create Canonical Document of tags.
-        f = open(self.csv_file.canonical_path()+os.sep+'Tags.txt', 'w')
-        
         #Add the Documents tags to the tag file.
         for tag in tags_calc.keys():
             if tag == 'order':
                 continue
-            f.write(tag.replace(' ','_')+'\n')
+            else:
+                #Create Canonical Document of tags.
+                f = open(self.csv_file.canonical_path()+os.sep+'Tag_'+tag+'.txt', 'w')
+                f.write(tag.replace(' ','_'))
+                f.close()
             
             #Now look at the words located bellow the tagged column and look for possible
             #canonical words.
@@ -178,9 +179,14 @@ class CSVReader():
 
                     replacement_tags[tag] = {'yes': yes}
                     replacement_tags[tag]['no'] = no
-                    
-                    f.write(yes+'\n')
-                    f.write(no+'\n')
+
+                    f = open(self.csv_file.canonical_path()+os.sep+'Tag_'+yes+'.txt', 'w')
+                    f.write(yes)
+                    f.close()
+
+                    f = open(self.csv_file.canonical_path()+os.sep+'Tag_'+no+'.txt', 'w')
+                    f.write(no)
+                    f.close()
                     break
                 elif collumn.count(collumn[i]) <= 2:
                     if len(collumn[i]) > 5:
@@ -207,7 +213,9 @@ class CSVReader():
                         else:
                             replacement_tags[tag][collumn[i]] = new_tag
                         #Write tags into the canonical document.
+                        f = open(self.csv_file.canonical_path()+os.sep+'Tag_'+new_tag+'.txt', 'w')
                         f.write(new_tag+'\n')
+                        f.close()
                     i += collumn.count(collumn[i])
             i = 0
         
@@ -228,8 +236,6 @@ class CSVReader():
             self.create_file(counter, r)
             counter += 1
             r = []
-            
-        f.close()
 
 ##The script can run automatically by uncommenting the code bellow and giving it a path in place
 ##of the "user_inputted_path".
