@@ -418,10 +418,44 @@ class SelectionLayer(Layer):
         if self.luminoso.leftMouseDown():
             self.luminoso.select_nearest_point()
 
+class NetworkLayer(Layer):
+    def __init__(self, luminoso, n):
+        Layer.__init__(self, luminoso)
+        self.n = n
+        self.root = None
+        self.lines = []
+
+    def get_most_similar(self, index, n):
+        vec = self.luminoso.array[index]
+        sim = divisi2.dot(self.luminoso.array, vec) / np.sqrt(np.sum(self.luminoso.array ** 2, axis=1))
+        most_sim = np.argsort(sim)[-n:]
+        return most_sim
+
+    def selectEvent(self, index):
+        self.focus(index)
+
+    def focus(self, index):
+        self.root = index
+        self.lines = []
+        for sim in self.get_most_similar(index, self.n):
+            self.lines.append((index, sim))
+    
+    def draw(self, painter):
+        if self.root:
+            lines_to_draw = []
+            for (source, target) in self.lines:
+                source_pt = Point(*self.luminoso.components_to_screen(self.luminoso.array[source]))
+                target_pt = Point(*self.luminoso.components_to_screen(self.luminoso.array[target]))
+                lines_to_draw.append(Line(source_pt, target_pt))
+
+            painter.setPen(QColor(200, 200, 200, 128))
+            painter.drawLines(lines_to_draw)
+
 class SimilarityLayer(Layer):
     def selectEvent(self, index):
         vec = self.luminoso.array[index]
         sim = divisi2.dot(self.luminoso.array, vec) / np.linalg.norm(vec) / np.sqrt(np.sum(self.luminoso.array ** 2, axis=1))
+
         sim_indices = np.clip(np.int32(sim*600 + 300), 0, 599)
         self.luminoso.colors = simcolors[sim_indices]
 
@@ -665,6 +699,7 @@ class SVDViewer(QWidget):
             magnitudes[svdmatrix.row_index(c)] *= 8
         widget.insert_layer(1, CanonicalLayer, canonical)
         widget.insert_layer(2, LinkLayer, matrix)
+        widget.insert_layer(3, NetworkLayer, 5)
         return widget
 
     @staticmethod
