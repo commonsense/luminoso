@@ -6,6 +6,7 @@ import numpy as np
 from csc.util.persist import get_picklecached_thing
 from collections import defaultdict
 from csc import divisi2
+from luminoso import svgfig
 
 # This initializes Qt, and nothing works without it. Even though we
 # don't use the "app" variable until the end.
@@ -151,6 +152,9 @@ class Layer(object):
         called, and passed a QtPainter object as an argument, which the Layer
         can use to put the appropriate graphics on the screen.
         """
+        pass
+
+    def drawSVG(self):
         pass
 
     def resize(self, width, height):
@@ -318,6 +322,19 @@ class PointLayer(Layer):
             if size >= 1 and self.luminoso.is_on_screen(x, y):
                 painter.setBrush(QColor(r, g, b))
                 painter.drawEllipse(Point(x, y), size, size)
+
+    def drawSVG(self):
+        circles = []
+        pixelsize = self.luminoso.pixel_size()
+        for i in xrange(self.luminoso.npoints):
+            x, y = self.luminoso.screenpts[i]
+            r, g, b = self.luminoso.colors[i]
+            mag = max(0.1, self.sizes[i] / pixelsize * 2)
+            color = svgfig.rgb(r, g, b, maximum=255.)
+            circle = svgfig.Ellipse(x, y, mag, 0, mag, fill=color)
+            circle.attr['stroke-width'] = '0.05'
+            circles.append(circle)
+        return svgfig.Fig(*circles)
     
     def calculate_magnitudes(self):
         """
@@ -381,6 +398,18 @@ class LabelLayer(Layer):
             labeled_so_far += 1
             if labeled_so_far >= self.nlabels: break
 
+    def drawSVG(self):
+        texts = []
+        for i in xrange(self.luminoso.npoints):
+            x, y = self.luminoso.screenpts[i]
+            r, g, b = self.luminoso.colors[i] * 0.5
+            mag = self.magnitudes[i]
+            color = svgfig.rgb(r, g, b, maximum=255.)
+            text = svgfig.Text(str(x), str(y), self.luminoso.labels[i], fill=color)
+            text.attr['font-size'] = str(np.sqrt(mag)*20)
+            texts.append(text)
+        return svgfig.Fig(*texts)
+    
     def wheelEvent(self, event):
         self.update_order()
 
@@ -428,8 +457,9 @@ class NetworkLayer(Layer):
     def get_most_similar(self, index, n):
         vec = self.luminoso.array[index]
         sim = divisi2.dot(self.luminoso.array, vec) / np.sqrt(np.sum(self.luminoso.array ** 2, axis=1))
-        most_sim = np.argsort(sim)[-n:]
-        return most_sim
+        most_similar = np.argsort(sim)[-n:]
+        how_similar = sim[most_similar]
+        return zip(most_similar, how_similar)
 
     def selectEvent(self, index):
         self.focus(index)
@@ -437,7 +467,7 @@ class NetworkLayer(Layer):
     def focus(self, index):
         self.root = index
         self.lines = []
-        for sim in self.get_most_similar(index, self.n):
+        for sim, amount in self.get_most_similar(index, self.n):
             self.lines.append((index, sim))
     
     def draw(self, painter):
@@ -450,6 +480,17 @@ class NetworkLayer(Layer):
 
             painter.setPen(QColor(200, 200, 200, 128))
             painter.drawLines(lines_to_draw)
+    
+    def drawSVG(self):
+        lines = []
+        for index in xrange(self.luminoso.npoints):
+            for sim, amount in self.get_most_similar(index, self.n):
+                sx, sy = self.luminoso.screenpts[index]
+                tx, ty = self.luminoso.screenpts[sim]
+                line = svgfig.Line(sx, sy, tx, ty, stroke='black', opacity='0.4')
+                line.attr['stroke-width'] = str(amount/2)
+                lines.append(line)
+        return svgfig.Fig(*lines)
 
 class SimilarityLayer(Layer):
     def selectEvent(self, index):
@@ -585,6 +626,17 @@ class LinkLayer(Layer):
 
             painter.setPen(QColor(200, 0, 0, 160))
             painter.drawLines(lines)
+    
+    def drawSVG(self):
+        lines = []
+        for index in xrange(self.luminoso.npoints):
+            self.selectEvent(index)
+            sx, sy = self.luminoso.screenpts[self.source]
+            for target in self.connections:
+                tx, ty = self.luminoso.screenpts[target]
+                line = svgfig.Line(sx, sy, tx, ty, stroke='blue', opacity='0.4')
+                lines.append(line)
+        return svgfig.Fig(*lines)
         
 class SVDViewer(QWidget):
     def __init__(self, array, labels, **options):
@@ -922,6 +974,22 @@ class SVDViewer(QWidget):
         self.update_colors()
         self.update()
 
+    def get_svg_figure(self):
+        figs = []
+        for layer in self.layers:
+            fig = layer.drawSVG()
+            if fig is not None: figs.append(fig)
+        return svgfig.Fig(*figs)
+
+    def write_svg(self, filename=None):
+        if filename is None: filename = 'luminoso.svg'
+        print filename
+        out = open(filename, 'w')
+        out.write("<svg>\n")
+        out.write(self.get_svg_figure().SVG().xml())
+        out.write("\n</svg>\n")
+        out.close()
+
 def get_conceptnet():
     from csc.divisi2.network import conceptnet_matrix
     return conceptnet_matrix('en').normalize_all()
@@ -1075,6 +1143,10 @@ class SVDViewPanel(QWidget):
             self.x_chooser.setCurrentIndex(self.x_chooser.findText("Default"))
             self.y_chooser.setCurrentIndex(self.y_chooser.findText("Default"))
             self.viewer.activate_timer()
+
+    def write_svg(self, filename):
+        if self.viewer is not None:
+            self.viewer.write_svg(filename)
 
     def focus_on_point(self, text):
         if self.viewer is not None:

@@ -165,7 +165,13 @@ class MainWindow(QtGui.QMainWindow):
         self.toolbar.addSeparator()
         self.add_action("&Viewer", "&Previous axis", self.ui.svdview_panel.prev_axis, "Ctrl+Left", 'actions/media-seek-backward.png')
         self.add_action("&Viewer", "&Next axis", self.ui.svdview_panel.next_axis, "Ctrl+Right", 'actions/media-seek-forward.png')
+        self.add_action("&Viewer", "Save as &SVG...", self.save_svg, "Ctrl+G")
         self.toolbar.addSeparator()
+    
+    def save_svg(self):
+        filename = QtGui.QFileDialog.getSaveFileName(self, "Choose where to save this SVG", package_dir)
+        if filename:
+            self.ui.svdview_panel.write_svg(filename)
 
     def new_study_dialog(self):
         dirname = QtGui.QFileDialog.getSaveFileName(self, "Choose where to save this study", package_dir)
@@ -176,7 +182,7 @@ class MainWindow(QtGui.QMainWindow):
     def csv_study(self):
         csv_file = QtGui.QFileDialog.getOpenFileNames(None,"Select a CSV File to open.","/home")
         filename = csv_file[0]
-        if filename != None and filename.endsWith(QtCore.QString('.csv')):
+        if filename and filename.endsWith(QtCore.QString('.csv')):
             csv = CSVFile(unicode(filename))
             self.ui.show_info("<h3>Creating Study...</h3><p>Study being located at "
                               +str(csv.study_path)+"</p><p>(this may take a few minutes)</p>")
