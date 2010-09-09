@@ -329,10 +329,13 @@ class PointLayer(Layer):
         for i in xrange(self.luminoso.npoints):
             x, y = self.luminoso.screenpts[i]
             r, g, b = self.luminoso.colors[i]
-            mag = max(0.1, self.sizes[i] / pixelsize * 2)
+            mag = max(0.1, self.sizes[i] / pixelsize * 4)
             color = svgfig.rgb(r, g, b, maximum=255.)
-            circle = svgfig.Ellipse(x, y, mag, 0, mag, fill=color)
-            circle.attr['stroke-width'] = '0.05'
+            circle = svgfig.Ellipse(x, y, mag, 0, mag, fill=color, stroke='black')
+            if self.luminoso.labels[i].endswith('.txt'):
+                circle.attr['stroke-width'] = '1.0'
+            else:
+                circle.attr['stroke-width'] = '0.2'
             circles.append(circle)
         return svgfig.Fig(*circles)
     
@@ -346,9 +349,6 @@ class PointLayer(Layer):
             sizes = np.sum(self.luminoso.array ** 2, axis=-1) ** 0.25
         sizes /= (np.sum(sizes) / len(sizes))
         sizes *= self.luminoso.scale * np.sqrt(len(sizes)) / 1000000
-        for i in xrange(len(self.luminoso.labels)):
-            if self.luminoso.labels[i].endswith('.txt'):
-                sizes[i] /= 10
         return sizes
 
 class LabelLayer(Layer):
@@ -401,12 +401,19 @@ class LabelLayer(Layer):
     def drawSVG(self):
         texts = []
         for i in xrange(self.luminoso.npoints):
+            label = self.luminoso.labels[i]
+            bold = False
             x, y = self.luminoso.screenpts[i]
             r, g, b = self.luminoso.colors[i] * 0.5
             mag = self.magnitudes[i]
+            if label.endswith('.txt'):
+                label = label[:-4]
+                bold = True
+                mag = 0.04
             color = svgfig.rgb(r, g, b, maximum=255.)
-            text = svgfig.Text(str(x), str(y), self.luminoso.labels[i], fill=color)
-            text.attr['font-size'] = str(np.sqrt(mag)*20)
+            text = svgfig.Text(str(x), str(y), label, fill=color)
+            text.attr['font-size'] = str(np.sqrt(mag)*40)
+            if bold: text.attr['font-weight'] = 'bold'
             texts.append(text)
         return svgfig.Fig(*texts)
     
@@ -453,10 +460,11 @@ class NetworkLayer(Layer):
         self.n = n
         self.root = None
         self.lines = []
+        self.concept_filter = [(not label.endswith('.txt')) for label in self.luminoso.labels]
 
     def get_most_similar(self, index, n):
         vec = self.luminoso.array[index]
-        sim = divisi2.dot(self.luminoso.array, vec) / np.sqrt(np.sum(self.luminoso.array ** 2, axis=1))
+        sim = divisi2.dot(self.luminoso.array, vec) / np.sqrt(np.sum(self.luminoso.array ** 2, axis=1)) * self.concept_filter
         most_similar = np.argsort(sim)[-n:]
         how_similar = sim[most_similar]
         return zip(most_similar, how_similar)
@@ -467,13 +475,10 @@ class NetworkLayer(Layer):
     def focus(self, index):
         self.root = index
         self.lines = []
+        if self.luminoso.labels[index].endswith('.txt'): return
         for sim, amount in self.get_most_similar(index, self.n):
             self.lines.append((index, sim))
             self.lines.append((index, sim))
-            for sim2 in self.get_most_similar(sim, self.n - 1):
-                self.lines.append((sim, sim2))
-                for sim3 in self.get_most_similar(sim2, self.n - 2):
-                    self.lines.append((sim2, sim3))
     
     def draw(self, painter):
         if self.root:
@@ -489,12 +494,14 @@ class NetworkLayer(Layer):
     def drawSVG(self):
         lines = []
         for index in xrange(self.luminoso.npoints):
+            if self.luminoso.labels[index].endswith('.txt'): continue
             for sim, amount in self.get_most_similar(index, self.n):
-                sx, sy = self.luminoso.screenpts[index]
-                tx, ty = self.luminoso.screenpts[sim]
-                line = svgfig.Line(sx, sy, tx, ty, stroke='black', opacity='0.4')
-                line.attr['stroke-width'] = str(amount/2)
-                lines.append(line)
+                if sim > index:
+                    sx, sy = self.luminoso.screenpts[index]
+                    tx, ty = self.luminoso.screenpts[sim]
+                    line = svgfig.Line(sx, sy, tx, ty, stroke='black', opacity='0.4')
+                    line.attr['stroke-width'] = str(amount/2)
+                    lines.append(line)
         return svgfig.Fig(*lines)
 
 class SimilarityLayer(Layer):
@@ -638,9 +645,11 @@ class LinkLayer(Layer):
             self.selectEvent(index)
             sx, sy = self.luminoso.screenpts[self.source]
             for target in self.connections:
-                tx, ty = self.luminoso.screenpts[target]
-                line = svgfig.Line(sx, sy, tx, ty, stroke='blue', opacity='0.4')
-                lines.append(line)
+                if target > self.source:
+                    tx, ty = self.luminoso.screenpts[target]
+                    line = svgfig.Line(sx, sy, tx, ty, stroke='blue', opacity='0.2')
+                    line.attr['stroke-width'] = '0.25'
+                    lines.append(line)
         return svgfig.Fig(*lines)
         
 class SVDViewer(QWidget):
@@ -756,7 +765,7 @@ class SVDViewer(QWidget):
             magnitudes[svdmatrix.row_index(c)] *= 2
         widget.insert_layer(1, CanonicalLayer, canonical)
         widget.insert_layer(2, LinkLayer, matrix)
-        widget.insert_layer(3, NetworkLayer, 5)
+        widget.insert_layer(3, NetworkLayer, 6)
         return widget
 
     @staticmethod
@@ -988,7 +997,6 @@ class SVDViewer(QWidget):
 
     def write_svg(self, filename=None):
         if filename is None: filename = 'luminoso.svg'
-        print filename
         out = open(filename, 'w')
         out.write("<svg>\n")
         out.write(self.get_svg_figure().SVG().xml())
