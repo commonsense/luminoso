@@ -365,8 +365,8 @@ class LabelLayer(Layer):
 
             # Mask out areas that already have label text.
             dist = self.distances[lindex]
-            width = int(dist/4) + 16
-            height = int(dist/16) + 4
+            width = int(dist/16) + 6
+            height = int(dist/32) + 2
             xmin = max(x-width, 0)
             xmax = min(x+width, self.luminoso.width)
             ymin = max(y-height, 0)
@@ -439,6 +439,11 @@ class NetworkLayer(Layer):
         self.lines = []
         for sim in self.get_most_similar(index, self.n):
             self.lines.append((index, sim))
+            self.lines.append((index, sim))
+            for sim2 in self.get_most_similar(sim, self.n - 1):
+                self.lines.append((sim, sim2))
+                for sim3 in self.get_most_similar(sim2, self.n - 2):
+                    self.lines.append((sim2, sim3))
     
     def draw(self, painter):
         if self.root:
@@ -448,7 +453,7 @@ class NetworkLayer(Layer):
                 target_pt = Point(*self.luminoso.components_to_screen(self.luminoso.array[target]))
                 lines_to_draw.append(Line(source_pt, target_pt))
 
-            painter.setPen(QColor(200, 200, 200, 128))
+            painter.setPen(QColor(255, 255, 255, 100))
             painter.drawLines(lines_to_draw)
 
 class SimilarityLayer(Layer):
@@ -695,8 +700,8 @@ class SVDViewer(QWidget):
         widget.set_default_axes()
         if canonical is None: canonical = []
         for c in canonical:
-            svdmatrix[svdmatrix.row_index(c)] *= 4
-            magnitudes[svdmatrix.row_index(c)] *= 8
+            #svdmatrix[svdmatrix.row_index(c)] *= 4
+            magnitudes[svdmatrix.row_index(c)] *= 2
         widget.insert_layer(1, CanonicalLayer, canonical)
         widget.insert_layer(2, LinkLayer, matrix)
         widget.insert_layer(3, NetworkLayer, 5)
@@ -722,7 +727,7 @@ class SVDViewer(QWidget):
     def setup_standard_layers(self):
         self.add_layer(PixelRenderingLayer)
         self.add_layer(PointLayer)
-        self.add_layer(LabelLayer)
+        self.add_layer(LabelLayer, 1000, 2000)
         self.add_layer(SelectionLayer)
         self.add_layer(SimilarityLayer)
         self.add_layer(RotationLayer)
