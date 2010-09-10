@@ -33,6 +33,8 @@ import shutil
 # what is going on.
 SUBTRACT_MEAN = False
 
+EXTRA_STOPWORDS = ['also', 'not', 'without', 'ever', 'because', 'then', 'than']
+
 try:
     import json
 except ImportError:
@@ -93,6 +95,7 @@ def extract_concepts_from_words(words):
     pos_tagged_words = []
     positive = True
     for word in words:
+        if word in EXTRA_STOPWORDS: continue
         if word.startswith('#-'):
             neg_tagged_words.append(word)
         elif word.startswith('#'):

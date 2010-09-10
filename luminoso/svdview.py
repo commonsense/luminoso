@@ -365,8 +365,8 @@ class LabelLayer(Layer):
 
             # Mask out areas that already have label text.
             dist = self.distances[lindex]
-            width = int(dist/4) + 16
-            height = int(dist/16) + 4
+            width = int(dist/16) + 6
+            height = int(dist/32) + 2
             xmin = max(x-width, 0)
             xmax = min(x+width, self.luminoso.width)
             ymin = max(y-height, 0)
@@ -418,10 +418,49 @@ class SelectionLayer(Layer):
         if self.luminoso.leftMouseDown():
             self.luminoso.select_nearest_point()
 
+class NetworkLayer(Layer):
+    def __init__(self, luminoso, n):
+        Layer.__init__(self, luminoso)
+        self.n = n
+        self.root = None
+        self.lines = []
+
+    def get_most_similar(self, index, n):
+        vec = self.luminoso.array[index]
+        sim = divisi2.dot(self.luminoso.array, vec) / np.sqrt(np.sum(self.luminoso.array ** 2, axis=1))
+        most_sim = np.argsort(sim)[-n:]
+        return most_sim
+
+    def selectEvent(self, index):
+        self.focus(index)
+
+    def focus(self, index):
+        self.root = index
+        self.lines = []
+        for sim in self.get_most_similar(index, self.n):
+            self.lines.append((index, sim))
+            self.lines.append((index, sim))
+            for sim2 in self.get_most_similar(sim, self.n - 1):
+                self.lines.append((sim, sim2))
+                for sim3 in self.get_most_similar(sim2, self.n - 2):
+                    self.lines.append((sim2, sim3))
+    
+    def draw(self, painter):
+        if self.root:
+            lines_to_draw = []
+            for (source, target) in self.lines:
+                source_pt = Point(*self.luminoso.components_to_screen(self.luminoso.array[source]))
+                target_pt = Point(*self.luminoso.components_to_screen(self.luminoso.array[target]))
+                lines_to_draw.append(Line(source_pt, target_pt))
+
+            painter.setPen(QColor(255, 255, 255, 100))
+            painter.drawLines(lines_to_draw)
+
 class SimilarityLayer(Layer):
     def selectEvent(self, index):
         vec = self.luminoso.array[index]
         sim = divisi2.dot(self.luminoso.array, vec) / np.linalg.norm(vec) / np.sqrt(np.sum(self.luminoso.array ** 2, axis=1))
+
         sim_indices = np.clip(np.int32(sim*600 + 300), 0, 599)
         self.luminoso.colors = simcolors[sim_indices]
 
@@ -661,10 +700,11 @@ class SVDViewer(QWidget):
         widget.set_default_axes()
         if canonical is None: canonical = []
         for c in canonical:
-            svdmatrix[svdmatrix.row_index(c)] *= 4
-            magnitudes[svdmatrix.row_index(c)] *= 8
+            #svdmatrix[svdmatrix.row_index(c)] *= 4
+            magnitudes[svdmatrix.row_index(c)] *= 2
         widget.insert_layer(1, CanonicalLayer, canonical)
         widget.insert_layer(2, LinkLayer, matrix)
+        widget.insert_layer(3, NetworkLayer, 5)
         return widget
 
     @staticmethod
@@ -687,7 +727,7 @@ class SVDViewer(QWidget):
     def setup_standard_layers(self):
         self.add_layer(PixelRenderingLayer)
         self.add_layer(PointLayer)
-        self.add_layer(LabelLayer)
+        self.add_layer(LabelLayer, 1000, 2000)
         self.add_layer(SelectionLayer)
         self.add_layer(SimilarityLayer)
         self.add_layer(RotationLayer)
