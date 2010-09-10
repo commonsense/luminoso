@@ -155,9 +155,9 @@ class MainWindow(QtGui.QMainWindow):
 
     def setup_menus(self):
         self.add_action("&File", "&New study...", self.new_study_dialog, "Ctrl+N", 'actions/document-new.png')
-        self.add_action("&File", "&CSV File study...", self.csv_study, "Ctrl+C", 'actions/csv_file.png')
         self.add_action("&File", "&Open study...", self.load_study_dialog, "Ctrl+O", 'actions/document-open.png')
         self.add_action("&File", "&Edit study...", self.edit_study, "Ctrl+E", 'actions/document-properties.png')
+        self.add_action("&File", "&Import CSV File...", self.csv_study, "Ctrl+I", 'actions/csv_file.png')
         self.add_action("&Analysis", "&Analyze", self.analyze, "Ctrl+A", 'actions/go-next.png')
         self.add_action("&Analysis", "Show Study &Info", self.show_info,
         "Ctrl+I", "actions/edit-find.png")

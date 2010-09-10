@@ -79,8 +79,8 @@ class CanonicalDocument(Document):
     pass
 
 
-NEGATION = ['no', 'not', 'never', 'stop', 'lack', "n't"]
-PUNCTUATION = ['.', ',', '!', '?', '...', '-', ':', ';']
+NEGATION = ['no', 'not', 'never', 'stop', 'lack', "n't", "without"]
+PUNCTUATION = ['.', ',', '!', '?', '...', '-', ':', ';', '``', "''", "`", "'"]
 def extract_concepts_with_negation(text):
     words = en_nl.tokenize(text).split()
     return extract_concepts_from_words(words)
@@ -181,7 +181,7 @@ class Study(QtCore.QObject):
         entries = []
         for doc in self.study_documents:
             self._step(doc.name)
-            for concept, value in doc.extract_concepts_with_negation()[:100]:
+            for concept, value in doc.extract_concepts_with_negation()[:500]:
                 if (concept not in PUNCTUATION) and (not en_nl.is_blacklisted(concept)):
                     entries.append((value, doc.name, concept))
         documents_matrix = divisi2.make_sparse(entries).normalize_tfidf(cols_are_terms=True)
@@ -208,7 +208,7 @@ class Study(QtCore.QObject):
         # NOTE: this is the number you change to make a study larger or
         # smaller.
         for concept, count in concept_counts.to_sparse().named_items():
-            if count >= 3: valid_concepts.add(concept)
+            if count >= 2: valid_concepts.add(concept)
 
         entries = []
         for doc in self.study_documents:
