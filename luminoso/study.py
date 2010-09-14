@@ -211,7 +211,7 @@ class Study(QtCore.QObject):
         # NOTE: this is the number you change to make a study larger or
         # smaller.
         for concept, count in concept_counts.to_sparse().named_items():
-            if count >= 2: valid_concepts.add(concept)
+            if count >= 3: valid_concepts.add(concept)
 
         entries = []
         for doc in self.study_documents:
@@ -477,6 +477,7 @@ class StudyResults(QtCore.QObject):
 
     def get_concept_info(self, concept):
         if concept not in self.spectral.row_labels: return None
+        if concept not in self.docs.col_labels: return None
         related = self.spectral.row_named(concept).top_items(10)
         related = [x[0] for x in related if not x[0].endswith('.txt')]
         documents = [x[1] for x in self.docs.col_named(concept).named_entries()]
