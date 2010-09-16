@@ -455,15 +455,14 @@ class StudyResults(QtCore.QObject):
         if self.stats is None: return
         self.info = render_info_page(self)
         with open(filename, 'w') as out:
-            out.write(self.info)
+            out.write(self.info.encode('utf-8'))
         return self.info
 
     def write_core(self, filename):
         if self.stats is None: return
+        core_str = u', '.join(self.stats['core'])
         with open(filename, 'w') as out:
-            for concept in self.stats['core']:
-                out.write(concept+', ')
-            out.write('\n')
+            out.write(core_str.encode('utf-8')+'\n')
 
     def get_consistency(self):
         return self.stats['consistency']
