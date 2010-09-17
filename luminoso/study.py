@@ -33,7 +33,7 @@ import shutil
 # what is going on.
 SUBTRACT_MEAN = False
 
-EXTRA_STOPWORDS = ['also', 'not', 'without', 'ever', 'because', 'then', 'than']
+EXTRA_STOPWORDS = ['also', 'not', 'without', 'ever', 'because', 'then', 'than', 'do', 'just', 'how', 'out', 'much']
 
 try:
     import json
@@ -337,62 +337,74 @@ class Study(QtCore.QObject):
             centrality = None
             correlation = None
             core = None
+            key_concepts = None
+            c_centrality = None
+            c_correlation = None
         else:
-            concept_sums = docs.col_op(np.sum)
-            doc_indices = [spectral.left.row_index(doc.name)
+            # Determine which indices of the association matrix correspond to
+            # documents.
+            doc_indices = [spectral.row_index(doc.name)
                            for doc in self.study_documents
-                           if doc.name in spectral.left.row_labels]
+                           if doc.name in spectral.row_labels]
+            valid_concepts = [c for c in spectral.row_labels if not c.endswith('.txt')]
+            concept_indices = [spectral.row_index(c) for c in valid_concepts]
             
             # Compute the association of all study documents with each other
             assoc_grid = np.asarray(spectral[doc_indices, doc_indices].to_dense())
             assert not np.any(np.isnan(assoc_grid))
-            assoc_list = []
-            for i in xrange(1, assoc_grid.shape[0]):
-                assoc_list.extend(assoc_grid[i, :i])
-
-            reference_mean = np.mean(assoc_list)
-            reference_stdev = np.std(assoc_list)
-            reference_stderr = reference_stdev / len(doc_indices)
-
-            consistency = reference_mean / reference_stderr
-
-            ztest_stderr = reference_stdev / np.sqrt(len(doc_indices))
-
-            all_assoc = np.asarray(spectral[:, doc_indices].to_dense())
-            all_means = np.mean(all_assoc, axis=1)
-            all_stdev = np.std(all_assoc, axis=1)
-            all_stderr = all_stdev / np.sqrt(len(doc_indices))
             
-            centrality = divisi2.DenseVector((all_means - reference_mean) /
-              ztest_stderr, spectral.row_labels)
-            correlation = divisi2.DenseVector(all_means / ztest_stderr,
-              spectral.row_labels)
-            core = centrality.top_items(len(centrality)-1)
+            # Make an ad hoc category of documents, then find how much each
+            # document is associated with this average document.
+            category_vec = divisi2.DenseVector(spectral.shape[0], spectral.row_labels)
+            category_vec[doc_indices] = 1.0/len(doc_indices)
+            all_assoc = spectral.left_category(category_vec)
+            doc_assoc = all_assoc[doc_indices]
+            
+            # Calculate similarity statistics over all documents.
+            doc_mean = np.mean(np.asarray(doc_assoc))
+            doc_stdev = np.std(np.asarray(doc_assoc))
+            doc_stderr = doc_stdev / np.sqrt(len(doc_indices))
+
+            # ...and over all concepts, though we may not need this.
+            all_mean = np.mean(np.asarray(all_assoc))
+            all_stdev = np.std(np.asarray(all_assoc))
+            all_stderr = all_stdev / np.sqrt(spectral.shape[0],)
+
+            consistency = doc_mean / doc_stderr
+            centrality = divisi2.DenseVector((all_assoc - doc_mean) / doc_stderr, spectral.row_labels)
+            correlation = divisi2.DenseVector(all_assoc / doc_stderr, spectral.row_labels)
+            core = centrality.top_items(len(centrality)/2)
             core = [c[0] for c in core
-                    if c[0] in concept_sums.labels
-                    and c[1] > .001]
+                    if c[0] in valid_concepts
+                    and c[1] > .001][:20]
 
             c_centrality = {}
             c_correlation = {}
             key_concepts = {}
-            sdoc_indices = [spectral.col_index(sdoc.name)
-                            for sdoc in self.study_documents
-                            if sdoc.name in spectral.col_labels]
-            doc_occur = np.abs(np.minimum(1, self._documents_matrix.to_dense()))
-            baseline = (1.0 + np.sum(np.asarray(doc_occur),
-              axis=0)) / doc_occur.shape[0]
+            
+            # the number of times each concept appears in each document
+            doc_occur = self._documents_matrix
+
+            # the average number of occurrences you expect of each document
+            baseline = (1.0 + doc_occur.col_op(len)) / doc_occur.shape[0]
             for doc in self.canonical_documents:
+                # record centrality and correlation for this document
                 c_centrality[doc.name] = centrality.entry_named(doc.name)
                 c_correlation[doc.name] = correlation.entry_named(doc.name)
-                docvec = np.maximum(0, spectral.row_named(doc.name)[sdoc_indices])
+
+                # find a weighted vector of similar documents
+                docvec = np.maximum(0, spectral.row_named(doc.name)[doc_indices]) ** 3
                 docvec /= (0.0001 + np.sum(docvec))
                 keyvec = divisi2.aligned_matrix_multiply(docvec, doc_occur)
+
                 assert not any(np.isnan(keyvec))
                 assert not any(np.isinf(keyvec))
-                interesting = keyvec #/ baseline
+                interesting = spectral.row_named(doc.name)[concept_indices]
+                #interesting = keyvec/baseline
                 key_concepts[doc.name] = []
                 for key, val in interesting.top_items(5):
-                    key_concepts[doc.name].append((key, keyvec.entry_named(key)))
+                    if val > 0.0 and keyvec.entry_named(key) > 0.0:
+                        key_concepts[doc.name].append((key, keyvec.entry_named(key)))
         
         return {
             'num_documents': self.num_documents,
@@ -631,7 +643,7 @@ class StudyDirectory(QtCore.QObject):
         else:
             return files
 
-    def convert_old_study():
+    def convert_old_study(self):
         print "Converting Divisi1 to Divisi2 study."
         from csc.divisi2.network import conceptnet_matrix
         cnet_matrix = conceptnet_matrix('en')
