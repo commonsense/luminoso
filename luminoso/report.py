@@ -29,7 +29,7 @@ def default_info_page(study):
     study_name = study.name
     return default_template.render(locals())
 
-template = Template("""
+template = Template(u"""
 <html><body>
 <h2>Results for {{study_name}}</h2>
 <p>Analyzed at {{timestamp}}</p>

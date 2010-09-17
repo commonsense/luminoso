@@ -211,7 +211,7 @@ class Study(QtCore.QObject):
         # NOTE: this is the number you change to make a study larger or
         # smaller.
         for concept, count in concept_counts.to_sparse().named_items():
-            if count >= 2: valid_concepts.add(concept)
+            if count >= 3: valid_concepts.add(concept)
 
         entries = []
         for doc in self.study_documents:
@@ -455,15 +455,14 @@ class StudyResults(QtCore.QObject):
         if self.stats is None: return
         self.info = render_info_page(self)
         with open(filename, 'w') as out:
-            out.write(self.info)
+            out.write(self.info.encode('utf-8'))
         return self.info
 
     def write_core(self, filename):
         if self.stats is None: return
+        core_str = u', '.join(self.stats['core'])
         with open(filename, 'w') as out:
-            for concept in self.stats['core']:
-                out.write(concept+', ')
-            out.write('\n')
+            out.write(core_str.encode('utf-8')+'\n')
 
     def get_consistency(self):
         return self.stats['consistency']
@@ -477,6 +476,7 @@ class StudyResults(QtCore.QObject):
 
     def get_concept_info(self, concept):
         if concept not in self.spectral.row_labels: return None
+        if concept not in self.docs.col_labels: return None
         related = self.spectral.row_named(concept).top_items(10)
         related = [x[0] for x in related if not x[0].endswith('.txt')]
         if concept in self.docs.col_labels:
