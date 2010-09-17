@@ -102,7 +102,7 @@ class MainWindow(QtGui.QMainWindow):
             self.selected_label(label)
 
     def selected_label(self, label):
-        index = self.ui.tree_view.find_filename_index(label)
+        index = self.ui.tree_view.find_document_index(label)
         if index is not None:
             self.ui.tree_view.setSelection(self.ui.tree_view.visualRect(index), self.ui.tree_view.selectionModel().ClearAndSelect)
 

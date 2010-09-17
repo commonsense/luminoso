@@ -479,7 +479,10 @@ class StudyResults(QtCore.QObject):
         if concept not in self.spectral.row_labels: return None
         related = self.spectral.row_named(concept).top_items(10)
         related = [x[0] for x in related if not x[0].endswith('.txt')]
-        documents = [x[1] for x in self.docs.col_named(concept).named_entries()]
+        if concept in self.docs.col_labels:
+            documents = [x[1] for x in self.docs.col_named(concept).named_entries()]
+        else:
+            documents = []
 
         related_str = ', '.join(related[:5])
         documents_str = ', '.join(documents[:10])
