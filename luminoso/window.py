@@ -19,7 +19,7 @@ logger = logging.getLogger('luminoso')
 
 logger.setLevel(logging.INFO)
 
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 DEFAULT_MESSAGE = """
 <h2>Luminoso %(VERSION)s</h2>
 <p>Choose "New Study" or "Open Study" to begin.</p>
