@@ -2,7 +2,7 @@ from __future__ import with_statement
 from PyQt4 import QtCore, QtGui
 from PyQt4.QtCore import Qt
 
-from luminoso.study import StudyDirectory, Study
+from luminoso.study import StudyDirectory, Study, StudyLoadError
 from luminoso.ui import LuminosoUI
 from luminoso.batch import progress_reporter
 
@@ -210,22 +210,24 @@ class MainWindow(QtGui.QMainWindow):
         """
         self.set_study_dir(dir)
         self.ui.show_info("<h3>Loading...</h3>")
+        try:
+            with progress_reporter(self, 'Loading study %s' % dir, 7) as progress:
+                progress.set_text('Loading.')
+                self.study = self.study_dir.get_study()
+                self.connect(self.study, QtCore.SIGNAL('step(QString)'), progress.tick)
+                progress.set_text('Loading analysis.')
+                results = self.study_dir.get_existing_analysis()
+                progress.tick('Updating view.')
+                self.update_svdview(results)
+                progress.tick('Updating options.')
+                self.update_options()
+                self.disconnect(self.study, QtCore.SIGNAL('step(QString)'), progress.tick)
 
-        with progress_reporter(self, 'Loading study %s' % dir, 7) as progress:
-            progress.set_text('Loading.')
-            self.study = self.study_dir.get_study()
-            self.connect(self.study, QtCore.SIGNAL('step(QString)'), progress.tick)
-            progress.set_text('Loading analysis.')
-            results = self.study_dir.get_existing_analysis()
-            progress.tick('Updating view.')
-            self.update_svdview(results)
-            progress.tick('Updating options.')
-            self.update_options()
-            self.disconnect(self.study, QtCore.SIGNAL('step(QString)'), progress.tick)
-
-        self.results = results
-        self.show_info()
-        self.study_loaded() # TODO: Make it a slot.
+            self.results = results
+            self.show_info()
+            self.study_loaded() # TODO: Make it a slot.
+        except StudyLoadError:
+            self.ui.show_info("%s is not a valid study directory." % dir)
 
     def study_loaded(self, loaded=True):
         '''

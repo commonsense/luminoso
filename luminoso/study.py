@@ -603,7 +603,7 @@ class StudyDirectory(QtCore.QObject):
             'conceptnet_en.assoc.smat'), os.path.join(destdir, 'Matrices',
             'conceptnet_en.assoc.smat'))
             write_json_to_file({}, dest_path('settings.json'))
-        except IOError:
+        except (IOError, OSError):
             raise StudyLoadError
 
         return StudyDirectory(destdir)
@@ -616,7 +616,7 @@ class StudyDirectory(QtCore.QObject):
     def load_settings(self):
         try:
             self.settings = load_json_from_file(self.get_settings_file())
-        except (IOError, ValueError):
+        except (IOError, ValueError, OSError):
             self.settings = {}
 
     def save_settings(self):
@@ -696,7 +696,7 @@ class StudyDirectory(QtCore.QObject):
                          other_matrices=self.get_matrices(),
                          settings = self.settings
                         )
-        except IOError:
+        except (IOError, OSError):
             raise StudyLoadError
 
     def analyze(self):
