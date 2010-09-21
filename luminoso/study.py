@@ -126,11 +126,16 @@ def write_json_to_file(data, file):
 def entry_count(vec):
     return np.sum(np.abs(vec))
 
+DEFAULT_SETTINGS = {
+    'axes': 20,
+    'concept_cutoff': 2
+}
+
 class Study(QtCore.QObject):
     '''
     A Study is a collection of documents and other matrices that can be analyzed.
     '''
-    def __init__(self, name, documents, canonical, other_matrices, num_axes=20):
+    def __init__(self, name, documents, canonical, other_matrices, settings):
         QtCore.QObject.__init__(self)
         self.name = name
         self.study_documents = documents
@@ -138,7 +143,11 @@ class Study(QtCore.QObject):
         # self.documents is now a property
         self._documents_matrix = None
         self.other_matrices = other_matrices
-        self.num_axes = num_axes
+        self.settings = settings
+
+    def config(self, key):
+        if key in self.settings: return self.settings[key]
+        else: return DEFAULT_SETTINGS[key]
         
     def _step(self, msg):
         logger.info(msg)
@@ -211,7 +220,7 @@ class Study(QtCore.QObject):
         # NOTE: this is the number you change to make a study larger or
         # smaller.
         for concept, count in concept_counts.to_sparse().named_items():
-            if count >= 3: valid_concepts.add(concept)
+            if count >= self.config('concept_cutoff'): valid_concepts.add(concept)
 
         entries = []
         for doc in self.study_documents:
@@ -299,7 +308,7 @@ class Study(QtCore.QObject):
         self._step('Finding eigenvectors...')
         document_matrix = self.get_documents_matrix()
         theblend, study_concepts = self.get_blend()
-        U, Sigma, V = theblend.normalize_all().svd(k=self.num_axes)
+        U, Sigma, V = theblend.normalize_all().svd(k=self.config('axes'))
         indices = [U.row_index(concept) for concept in study_concepts]
         reduced_U = U[indices]
         if self.is_associative():
@@ -567,6 +576,8 @@ class StudyResults(QtCore.QObject):
 
         return cls(for_study, docs, projections, spectral, magnitudes, stats)
 
+class StudyLoadError(Exception): pass
+
 class StudyDirectory(QtCore.QObject):
     '''
     A StudyDirectory manages the directory representing a study. It has three responsibilites:
@@ -584,13 +595,16 @@ class StudyDirectory(QtCore.QObject):
     def make_new(destdir):
         # make a new study... the hard way.
         def dest_path(x): return os.path.join(destdir, x)
-        os.mkdir(destdir)
-        for dir in ['Canonical', 'Documents', 'Matrices', 'Results']:
-            os.mkdir(dest_path(dir))
-        shutil.copy(os.path.join(package_dir, 'study_skel', 'Matrices',
-        'conceptnet_en.assoc.smat'), os.path.join(destdir, 'Matrices',
-        'conceptnet_en.assoc.smat'))
-        write_json_to_file({}, dest_path('settings.json'))
+        try:
+            os.mkdir(destdir)
+            for dir in ['Canonical', 'Documents', 'Matrices', 'Results']:
+                os.mkdir(dest_path(dir))
+            shutil.copy(os.path.join(package_dir, 'study_skel', 'Matrices',
+            'conceptnet_en.assoc.smat'), os.path.join(destdir, 'Matrices',
+            'conceptnet_en.assoc.smat'))
+            write_json_to_file({}, dest_path('settings.json'))
+        except IOError:
+            raise StudyLoadError
 
         return StudyDirectory(destdir)
     
@@ -604,7 +618,6 @@ class StudyDirectory(QtCore.QObject):
             self.settings = load_json_from_file(self.get_settings_file())
         except (IOError, ValueError):
             self.settings = {}
-            traceback.print_exc()
 
     def save_settings(self):
         write_json_to_file(self.settings, self.get_settings_file())
@@ -676,11 +689,15 @@ class StudyDirectory(QtCore.QObject):
     
 
     def get_study(self):
-        return Study(name=self.dir.split(os.path.sep)[-1],
-                     documents=self.get_documents(),
-                     canonical=self.get_canonical_documents(),
-                     other_matrices=self.get_matrices(),
-                     num_axes = self.settings.get('axes',20))
+        try:
+            return Study(name=self.dir.split(os.path.sep)[-1],
+                         documents=self.get_documents(),
+                         canonical=self.get_canonical_documents(),
+                         other_matrices=self.get_matrices(),
+                         settings = self.settings
+                        )
+        except IOError:
+            raise StudyLoadError
 
     def analyze(self):
         study = self.get_study()
@@ -689,10 +706,12 @@ class StudyDirectory(QtCore.QObject):
         results.save(self.study_path('Results'))
         return results
 
-    def set_num_axes(self, axes):
-        self.settings['axes'] = axes
-        self.study.num_axes = axes
+    def set_setting(self, key, value):
+        self.settings[key] = value
         self.save_settings()
+
+    def set_num_axes(self, axes):
+        self.set_setting('axes', axes)
     
     def get_existing_analysis(self):
         # FIXME: this loads the study twice, I think

@@ -80,6 +80,7 @@ class MainWindow(QtGui.QMainWindow):
         # Set up signals
         self.connect(self.ui.tree_view, QtCore.SIGNAL("clicked(QModelIndex)"), self.select_document)
         self.connect(self.ui.axes_spinbox, QtCore.SIGNAL("valueChanged(int)"), self.set_num_axes)
+        self.connect(self.ui.cutoff_spinbox, QtCore.SIGNAL("valueChanged(int)"), self.set_concept_cutoff)
         self.connect(self.ui.svdview_panel, QtCore.SIGNAL("svdSelectEvent()"), self.svdview_select)
 
         self.setup_menus()
@@ -130,7 +131,11 @@ class MainWindow(QtGui.QMainWindow):
 
     def set_num_axes(self, axes):
         if self.study is None: return
-        else: self.study_dir.set_num_axes(axes)
+        else: self.study_dir.set_setting('axes', axes)
+
+    def set_concept_cutoff(self, cutoff):
+        if self.study is None: return
+        else: self.study_dir.set_setting('concept_cutoff', cutoff)
 
     def add_action(self, menu, name, func, shortcut=None, toolbar_icon=None):
         """
@@ -249,8 +254,11 @@ class MainWindow(QtGui.QMainWindow):
     
     def update_options(self):
         axes = self.study_dir.settings.get('axes')
+        cutoff = self.study_dir.settings.get('concept_cutoff')
         if axes is not None:
             self.ui.set_num_axes(axes)
+        if cutoff is not None:
+            self.ui.set_concept_cutoff(cutoff)
     
     def get_svdview(self):
         """
