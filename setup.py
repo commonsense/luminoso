@@ -8,7 +8,7 @@ from stat import ST_MTIME
 if 'py2exe' in sys.argv:
     import py2exe
 
-import modulefinder, csc.util, csc.divisi2
+import modulefinder#, csc.util, csc.divisi2
 for p in sys.path:
    modulefinder.AddPackagePath(__name__, p)
 sys.path.append('luminoso/lib')
@@ -29,9 +29,7 @@ classifiers=[
     'Topic :: Software Development',
     'Topic :: Text Processing :: Linguistic',]
 
-INCLUDES = ["sip", "PyQt4.QtCore", "PyQt4.Qt", "PyQt4.QtGui", "PyQt4",
-            'csc.util', 'csc.divisi2', 'spyderlib', 'standalone_nlp.nl', 'standalone_nlp.lang_en', 'standalone_nlp.euro', 'standalone_nlp.trie', 'jinja2', 'numpy',
-            'chardet']
+INCLUDES = ["sip", "PySide.QtCore", "PySide.QtGui", "PySide", 'csc.util', 'csc.divisi2', 'spyderlib', 'standalone_nlp.nl', 'standalone_nlp.lang_en', 'standalone_nlp.euro', 'standalone_nlp.trie', 'jinja2', 'numpy', 'chardet']
 DATA_FILES = ['icons']
 
 setup(

@@ -1,6 +1,6 @@
 from __future__ import with_statement
-from PyQt4 import QtCore, QtGui
-from PyQt4.QtCore import Qt
+from PySide import QtCore, QtGui
+from PySide.QtCore import Qt
 
 from luminoso.study import StudyDirectory, Study, StudyLoadError
 from luminoso.ui import LuminosoUI

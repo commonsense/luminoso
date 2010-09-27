@@ -1,10 +1,10 @@
-from PyQt4 import QtCore, QtGui
-from PyQt4.QtCore import Qt
+from PySide import QtCore, QtGui
+from PySide.QtCore import Qt
 
 class progress_reporter(QtCore.QObject):
     def __init__(self, parent, name, num_steps, modal=True):
         QtCore.QObject.__init__(self)
-        self.progress = QtGui.QProgressDialog(name, QtCore.QString(), 0, num_steps-1, parent)
+        self.progress = QtGui.QProgressDialog(name, "", 0, num_steps-1, parent)
         if modal:
             self.progress.setWindowModality(Qt.WindowModal)
 

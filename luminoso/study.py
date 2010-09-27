@@ -9,7 +9,7 @@ if __name__ == '__main__':
     sys.path.extend([os.path.join(os.path.dirname(sys.argv[0]), "lib"),
                      os.path.dirname(sys.argv[0])])
 
-from PyQt4 import QtCore
+from PySide import QtCore
 import os, codecs, time
 import cPickle as pickle
 import numpy as np

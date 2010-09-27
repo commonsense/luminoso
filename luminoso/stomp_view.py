@@ -6,8 +6,8 @@ import simplejson as json
 import numpy as np
 
 import sys
-from PyQt4.QtCore import SIGNAL, QThread
-from PyQt4.QtGui import QApplication
+from PySide.QtCore import SIGNAL, QThread
+from PySide.QtGui import QApplication
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)

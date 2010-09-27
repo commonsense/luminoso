@@ -1,7 +1,7 @@
 import sys
 import re
-from PyQt4.QtCore import Qt, QRectF as Rect, QPointF as Point, QLineF as Line, QSize, QMutex, QObject, QString, QTimer, SIGNAL
-from PyQt4.QtGui import QApplication, QColor, QWidget, QImage, QPainter, QPen, QFont, QFontMetrics, QVBoxLayout, QComboBox, QLabel, QPushButton, QGridLayout, QCompleter
+from PySide.QtCore import Qt, QRectF as Rect, QPointF as Point, QLineF as Line, QSize, QMutex, QObject, QTimer, SIGNAL
+from PySide.QtGui import QApplication, QColor, QWidget, QImage, QPainter, QPen, QFont, QFontMetrics, QVBoxLayout, QComboBox, QLabel, QPushButton, QGridLayout, QCompleter
 import numpy as np
 from csc.util.persist import get_picklecached_thing
 from collections import defaultdict
@@ -818,8 +818,6 @@ class SVDViewer(QWidget):
         self.activate_timer()
 
     def set_axis_to_text(self, axis, text):
-        if isinstance(text, QString):
-            text = unicode(text)
         if not text: return
         if text in self.labels:
             index = self.labels.index(text)

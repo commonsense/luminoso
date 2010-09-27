@@ -3,7 +3,7 @@ import run_luminoso
 import pstats
 import sys
 real_stdout = sys.stdout
-from PyQt4.QtGui import QApplication
+from PySide.QtGui import QApplication
 
 app = QApplication(sys.argv)
 profile.run('run_luminoso.main(app)', 'luminoso.profile')

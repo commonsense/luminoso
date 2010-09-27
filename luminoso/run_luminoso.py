@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 from luminoso.whereami import get_icon
-from PyQt4 import QtCore, QtGui
-from PyQt4.QtCore import Qt
+from PySide import QtCore, QtGui
+from PySide.QtCore import Qt
 import sys, os
 import traceback
 

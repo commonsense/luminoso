@@ -3,7 +3,7 @@ import svdview
 import pstats
 
 import sys
-from PyQt4.QtGui import QApplication
+from PySide.QtGui import QApplication
 
 app = QApplication(sys.argv)
 profile.run('svdview.main(app)', 'svdview.profile')
