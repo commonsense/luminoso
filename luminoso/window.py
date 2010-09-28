@@ -2,7 +2,7 @@ from __future__ import with_statement
 from PyQt4 import QtCore, QtGui
 from PyQt4.QtCore import Qt
 
-from luminoso.study import StudyDirectory, Study
+from luminoso.study import StudyDirectory, Study, StudyLoadError
 from luminoso.ui import LuminosoUI
 from luminoso.batch import progress_reporter
 
@@ -19,10 +19,10 @@ logger = logging.getLogger('luminoso')
 
 logger.setLevel(logging.INFO)
 
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 DEFAULT_MESSAGE = """
 <h2>Luminoso %(VERSION)s</h2>
-<p>Choose "New Study", "CSV File Study" or "Open Study" to begin.</p>
+<p>Choose "New Study", "Open Study" or "Import CSV File" to begin.</p>
 """ % globals()
 
 class MainWindow(QtGui.QMainWindow):
@@ -80,6 +80,7 @@ class MainWindow(QtGui.QMainWindow):
         # Set up signals
         self.connect(self.ui.tree_view, QtCore.SIGNAL("clicked(QModelIndex)"), self.select_document)
         self.connect(self.ui.axes_spinbox, QtCore.SIGNAL("valueChanged(int)"), self.set_num_axes)
+        self.connect(self.ui.cutoff_spinbox, QtCore.SIGNAL("valueChanged(int)"), self.set_concept_cutoff)
         self.connect(self.ui.svdview_panel, QtCore.SIGNAL("svdSelectEvent()"), self.svdview_select)
 
         self.setup_menus()
@@ -102,7 +103,7 @@ class MainWindow(QtGui.QMainWindow):
             self.selected_label(label)
 
     def selected_label(self, label):
-        index = self.ui.tree_view.find_filename_index(label)
+        index = self.ui.tree_view.find_document_index(label)
         if index is not None:
             self.ui.tree_view.setSelection(self.ui.tree_view.visualRect(index), self.ui.tree_view.selectionModel().ClearAndSelect)
 
@@ -130,7 +131,11 @@ class MainWindow(QtGui.QMainWindow):
 
     def set_num_axes(self, axes):
         if self.study is None: return
-        else: self.study_dir.set_num_axes(axes)
+        else: self.study_dir.set_setting('axes', axes)
+
+    def set_concept_cutoff(self, cutoff):
+        if self.study is None: return
+        else: self.study_dir.set_setting('concept_cutoff', cutoff)
 
     def add_action(self, menu, name, func, shortcut=None, toolbar_icon=None):
         """
@@ -205,22 +210,24 @@ class MainWindow(QtGui.QMainWindow):
         """
         self.set_study_dir(dir)
         self.ui.show_info("<h3>Loading...</h3>")
+        try:
+            with progress_reporter(self, 'Loading study %s' % dir, 7) as progress:
+                progress.set_text('Loading.')
+                self.study = self.study_dir.get_study()
+                self.connect(self.study, QtCore.SIGNAL('step(QString)'), progress.tick)
+                progress.set_text('Loading analysis.')
+                results = self.study_dir.get_existing_analysis()
+                progress.tick('Updating view.')
+                self.update_svdview(results)
+                progress.tick('Updating options.')
+                self.update_options()
+                self.disconnect(self.study, QtCore.SIGNAL('step(QString)'), progress.tick)
 
-        with progress_reporter(self, 'Loading study %s' % dir, 7) as progress:
-            progress.set_text('Loading.')
-            self.study = self.study_dir.get_study()
-            self.connect(self.study, QtCore.SIGNAL('step(QString)'), progress.tick)
-            progress.set_text('Loading analysis.')
-            results = self.study_dir.get_existing_analysis()
-            progress.tick('Updating view.')
-            self.update_svdview(results)
-            progress.tick('Updating options.')
-            self.update_options()
-            self.disconnect(self.study, QtCore.SIGNAL('step(QString)'), progress.tick)
-
-        self.results = results
-        self.show_info()
-        self.study_loaded() # TODO: Make it a slot.
+            self.results = results
+            self.show_info()
+            self.study_loaded() # TODO: Make it a slot.
+        except StudyLoadError:
+            self.ui.show_info("%s is not a valid study directory." % dir)
 
     def study_loaded(self, loaded=True):
         '''
@@ -249,8 +256,11 @@ class MainWindow(QtGui.QMainWindow):
     
     def update_options(self):
         axes = self.study_dir.settings.get('axes')
+        cutoff = self.study_dir.settings.get('concept_cutoff')
         if axes is not None:
             self.ui.set_num_axes(axes)
+        if cutoff is not None:
+            self.ui.set_concept_cutoff(cutoff)
     
     def get_svdview(self):
         """

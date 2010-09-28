@@ -33,7 +33,7 @@ import shutil
 # what is going on.
 SUBTRACT_MEAN = False
 
-EXTRA_STOPWORDS = ['also', 'not', 'without', 'ever', 'because', 'then', 'than']
+EXTRA_STOPWORDS = ['also', 'not', 'without', 'ever', 'because', 'then', 'than', 'do', 'just', 'how', 'out', 'much']
 
 try:
     import json
@@ -126,11 +126,16 @@ def write_json_to_file(data, file):
 def entry_count(vec):
     return np.sum(np.abs(vec))
 
+DEFAULT_SETTINGS = {
+    'axes': 20,
+    'concept_cutoff': 2
+}
+
 class Study(QtCore.QObject):
     '''
     A Study is a collection of documents and other matrices that can be analyzed.
     '''
-    def __init__(self, name, documents, canonical, other_matrices, num_axes=20):
+    def __init__(self, name, documents, canonical, other_matrices, settings):
         QtCore.QObject.__init__(self)
         self.name = name
         self.study_documents = documents
@@ -138,7 +143,11 @@ class Study(QtCore.QObject):
         # self.documents is now a property
         self._documents_matrix = None
         self.other_matrices = other_matrices
-        self.num_axes = num_axes
+        self.settings = settings
+
+    def config(self, key):
+        if key in self.settings: return self.settings[key]
+        else: return DEFAULT_SETTINGS[key]
         
     def _step(self, msg):
         logger.info(msg)
@@ -211,7 +220,7 @@ class Study(QtCore.QObject):
         # NOTE: this is the number you change to make a study larger or
         # smaller.
         for concept, count in concept_counts.to_sparse().named_items():
-            if count >= 3: valid_concepts.add(concept)
+            if count >= self.config('concept_cutoff'): valid_concepts.add(concept)
 
         entries = []
         for doc in self.study_documents:
@@ -299,7 +308,7 @@ class Study(QtCore.QObject):
         self._step('Finding eigenvectors...')
         document_matrix = self.get_documents_matrix()
         theblend, study_concepts = self.get_blend()
-        U, Sigma, V = theblend.normalize_all().svd(k=self.num_axes)
+        U, Sigma, V = theblend.normalize_all().svd(k=self.config('axes'))
         indices = [U.row_index(concept) for concept in study_concepts]
         reduced_U = U[indices]
         if self.is_associative():
@@ -337,62 +346,74 @@ class Study(QtCore.QObject):
             centrality = None
             correlation = None
             core = None
+            key_concepts = None
+            c_centrality = None
+            c_correlation = None
         else:
-            concept_sums = docs.col_op(np.sum)
-            doc_indices = [spectral.left.row_index(doc.name)
+            # Determine which indices of the association matrix correspond to
+            # documents.
+            doc_indices = [spectral.row_index(doc.name)
                            for doc in self.study_documents
-                           if doc.name in spectral.left.row_labels]
+                           if doc.name in spectral.row_labels]
+            valid_concepts = [c for c in spectral.row_labels if not c.endswith('.txt')]
+            concept_indices = [spectral.row_index(c) for c in valid_concepts]
             
             # Compute the association of all study documents with each other
             assoc_grid = np.asarray(spectral[doc_indices, doc_indices].to_dense())
             assert not np.any(np.isnan(assoc_grid))
-            assoc_list = []
-            for i in xrange(1, assoc_grid.shape[0]):
-                assoc_list.extend(assoc_grid[i, :i])
-
-            reference_mean = np.mean(assoc_list)
-            reference_stdev = np.std(assoc_list)
-            reference_stderr = reference_stdev / len(doc_indices)
-
-            consistency = reference_mean / reference_stderr
-
-            ztest_stderr = reference_stdev / np.sqrt(len(doc_indices))
-
-            all_assoc = np.asarray(spectral[:, doc_indices].to_dense())
-            all_means = np.mean(all_assoc, axis=1)
-            all_stdev = np.std(all_assoc, axis=1)
-            all_stderr = all_stdev / np.sqrt(len(doc_indices))
             
-            centrality = divisi2.DenseVector((all_means - reference_mean) /
-              ztest_stderr, spectral.row_labels)
-            correlation = divisi2.DenseVector(all_means / ztest_stderr,
-              spectral.row_labels)
-            core = centrality.top_items(len(centrality)-1)
+            # Make an ad hoc category of documents, then find how much each
+            # document is associated with this average document.
+            category_vec = divisi2.DenseVector(spectral.shape[0], spectral.row_labels)
+            category_vec[doc_indices] = 1.0/len(doc_indices)
+            all_assoc = spectral.left_category(category_vec)
+            doc_assoc = all_assoc[doc_indices]
+            
+            # Calculate similarity statistics over all documents.
+            doc_mean = np.mean(np.asarray(doc_assoc))
+            doc_stdev = np.std(np.asarray(doc_assoc))
+            doc_stderr = doc_stdev / np.sqrt(len(doc_indices))
+
+            # ...and over all concepts, though we may not need this.
+            all_mean = np.mean(np.asarray(all_assoc))
+            all_stdev = np.std(np.asarray(all_assoc))
+            all_stderr = all_stdev / np.sqrt(spectral.shape[0],)
+
+            consistency = doc_mean / doc_stderr
+            centrality = divisi2.DenseVector((all_assoc - doc_mean) / doc_stderr, spectral.row_labels)
+            correlation = divisi2.DenseVector(all_assoc / doc_stderr, spectral.row_labels)
+            core = centrality.top_items(len(centrality)/2)
             core = [c[0] for c in core
-                    if c[0] in concept_sums.labels
-                    and c[1] > .001]
+                    if c[0] in valid_concepts
+                    and c[1] > .001][:20]
 
             c_centrality = {}
             c_correlation = {}
             key_concepts = {}
-            sdoc_indices = [spectral.col_index(sdoc.name)
-                            for sdoc in self.study_documents
-                            if sdoc.name in spectral.col_labels]
-            doc_occur = np.abs(np.minimum(1, self._documents_matrix.to_dense()))
-            baseline = (1.0 + np.sum(np.asarray(doc_occur),
-              axis=0)) / doc_occur.shape[0]
+            
+            # the number of times each concept appears in each document
+            doc_occur = self._documents_matrix
+
+            # the average number of occurrences you expect of each document
+            baseline = (1.0 + doc_occur.col_op(len)) / doc_occur.shape[0]
             for doc in self.canonical_documents:
+                # record centrality and correlation for this document
                 c_centrality[doc.name] = centrality.entry_named(doc.name)
                 c_correlation[doc.name] = correlation.entry_named(doc.name)
-                docvec = np.maximum(0, spectral.row_named(doc.name)[sdoc_indices])
+
+                # find a weighted vector of similar documents
+                docvec = np.maximum(0, spectral.row_named(doc.name)[doc_indices]) ** 3
                 docvec /= (0.0001 + np.sum(docvec))
                 keyvec = divisi2.aligned_matrix_multiply(docvec, doc_occur)
+
                 assert not any(np.isnan(keyvec))
                 assert not any(np.isinf(keyvec))
-                interesting = keyvec #/ baseline
+                interesting = spectral.row_named(doc.name)[concept_indices]
+                #interesting = keyvec/baseline
                 key_concepts[doc.name] = []
                 for key, val in interesting.top_items(5):
-                    key_concepts[doc.name].append((key, keyvec.entry_named(key)))
+                    if val > 0.0 and keyvec.entry_named(key) > 0.0:
+                        key_concepts[doc.name].append((key, keyvec.entry_named(key)))
         
         return {
             'num_documents': self.num_documents,
@@ -455,15 +476,14 @@ class StudyResults(QtCore.QObject):
         if self.stats is None: return
         self.info = render_info_page(self)
         with open(filename, 'w') as out:
-            out.write(self.info)
+            out.write(self.info.encode('utf-8'))
         return self.info
 
     def write_core(self, filename):
         if self.stats is None: return
+        core_str = u', '.join(self.stats['core'])
         with open(filename, 'w') as out:
-            for concept in self.stats['core']:
-                out.write(concept+', ')
-            out.write('\n')
+            out.write(core_str.encode('utf-8')+'\n')
 
     def get_consistency(self):
         return self.stats['consistency']
@@ -480,7 +500,10 @@ class StudyResults(QtCore.QObject):
         if concept not in self.docs.col_labels: return None
         related = self.spectral.row_named(concept).top_items(10)
         related = [x[0] for x in related if not x[0].endswith('.txt')]
-        documents = [x[1] for x in self.docs.col_named(concept).named_entries()]
+        if concept in self.docs.col_labels:
+            documents = [x[1] for x in self.docs.col_named(concept).named_entries()]
+        else:
+            documents = []
 
         related_str = ', '.join(related[:5])
         documents_str = ', '.join(documents[:10])
@@ -553,6 +576,8 @@ class StudyResults(QtCore.QObject):
 
         return cls(for_study, docs, projections, spectral, magnitudes, stats)
 
+class StudyLoadError(Exception): pass
+
 class StudyDirectory(QtCore.QObject):
     '''
     A StudyDirectory manages the directory representing a study. It has three responsibilites:
@@ -570,13 +595,16 @@ class StudyDirectory(QtCore.QObject):
     def make_new(destdir):
         # make a new study... the hard way.
         def dest_path(x): return os.path.join(destdir, x)
-        os.mkdir(destdir)
-        for dir in ['Canonical', 'Documents', 'Matrices', 'Results']:
-            os.mkdir(dest_path(dir))
-        shutil.copy(os.path.join(package_dir, 'study_skel', 'Matrices',
-        'conceptnet_en.assoc.smat'), os.path.join(destdir, 'Matrices',
-        'conceptnet_en.assoc.smat'))
-        write_json_to_file({}, dest_path('settings.json'))
+        try:
+            os.mkdir(destdir)
+            for dir in ['Canonical', 'Documents', 'Matrices', 'Results']:
+                os.mkdir(dest_path(dir))
+            shutil.copy(os.path.join(package_dir, 'study_skel', 'Matrices',
+            'conceptnet_en.assoc.smat'), os.path.join(destdir, 'Matrices',
+            'conceptnet_en.assoc.smat'))
+            write_json_to_file({}, dest_path('settings.json'))
+        except (IOError, OSError):
+            raise StudyLoadError
 
         return StudyDirectory(destdir)
     
@@ -588,9 +616,8 @@ class StudyDirectory(QtCore.QObject):
     def load_settings(self):
         try:
             self.settings = load_json_from_file(self.get_settings_file())
-        except (IOError, ValueError):
+        except (IOError, ValueError, OSError):
             self.settings = {}
-            traceback.print_exc()
 
     def save_settings(self):
         write_json_to_file(self.settings, self.get_settings_file())
@@ -629,7 +656,7 @@ class StudyDirectory(QtCore.QObject):
         else:
             return files
 
-    def convert_old_study():
+    def convert_old_study(self):
         print "Converting Divisi1 to Divisi2 study."
         from csc.divisi2.network import conceptnet_matrix
         cnet_matrix = conceptnet_matrix('en')
@@ -662,11 +689,15 @@ class StudyDirectory(QtCore.QObject):
     
 
     def get_study(self):
-        return Study(name=self.dir.split(os.path.sep)[-1],
-                     documents=self.get_documents(),
-                     canonical=self.get_canonical_documents(),
-                     other_matrices=self.get_matrices(),
-                     num_axes = self.settings.get('axes',20))
+        try:
+            return Study(name=self.dir.split(os.path.sep)[-1],
+                         documents=self.get_documents(),
+                         canonical=self.get_canonical_documents(),
+                         other_matrices=self.get_matrices(),
+                         settings = self.settings
+                        )
+        except (IOError, OSError):
+            raise StudyLoadError
 
     def analyze(self):
         study = self.get_study()
@@ -675,10 +706,12 @@ class StudyDirectory(QtCore.QObject):
         results.save(self.study_path('Results'))
         return results
 
-    def set_num_axes(self, axes):
-        self.settings['axes'] = axes
-        self.study.num_axes = axes
+    def set_setting(self, key, value):
+        self.settings[key] = value
         self.save_settings()
+
+    def set_num_axes(self, axes):
+        self.set_setting('axes', axes)
     
     def get_existing_analysis(self):
         # FIXME: this loads the study twice, I think

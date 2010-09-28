@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-VERSION = "1.2.1"
+VERSION = "1.3.0"
 
 from setuptools import setup, find_packages
 import os.path, sys
@@ -69,16 +69,20 @@ setup(
 
 '''
 Add the icons directory to the build.
+
+Commented out by Rob; this shouldn't be triggered just by importing the setup
+script.
 '''
-import shutil
+#import shutil
 
-#Create paths. One that points to the icons directory and one that creates
-#the disired place to copy to.
-srcPath = os.path.abspath('.ssh/../icons')
-targPath = os.path.abspath('.ssh/../dist/icons')
+##Create paths. One that points to the icons directory and one that creates
+##the disired place to copy to.
+#
+#srcPath = os.path.abspath('./icons')
+#targPath = os.path.abspath('./dist/icons')
 
-#Make sure the icons directory exists and that it has not been added to the build
-#yet.
-if os.path.exists(srcPath) and (not os.path.exists(targPath)):
-    shutil.copytree(srcPath,targPath)
+##Make sure the icons directory exists and that it has not been added to the build
+##yet.
+#if os.path.exists(srcPath) and (not os.path.exists(targPath)):
+#    shutil.copytree(srcPath,targPath)
 

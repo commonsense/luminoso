@@ -22,7 +22,10 @@ class LuminosoUI(QtGui.QWidget):
         self.study_options.setTitle("Study options")
         self.options_layout = QtGui.QVBoxLayout(self.study_options)
         self.axes_box = QtGui.QFrame(self.study_options)
+        self.cutoff_box = QtGui.QFrame(self.study_options)
         self.options_layout.addWidget(self.axes_box)
+        self.options_layout.addWidget(self.cutoff_box)
+
         self.axes_layout = QtGui.QHBoxLayout(self.axes_box)
         self.axes_label = QtGui.QLabel()
         self.axes_layout.addWidget(self.axes_label)
@@ -33,6 +36,15 @@ class LuminosoUI(QtGui.QWidget):
         self.axes_spinbox.setMaximum(1000)
         self.axes_spinbox.setValue(20)
         
+        self.cutoff_layout = QtGui.QHBoxLayout(self.cutoff_box)
+        self.cutoff_label = QtGui.QLabel()
+        self.cutoff_layout.addWidget(self.cutoff_label)
+        self.cutoff_label.setText("Concept threshold:")
+        self.cutoff_spinbox = QtGui.QSpinBox()
+        self.cutoff_layout.addWidget(self.cutoff_spinbox)
+        self.cutoff_spinbox.setMinimum(1)
+        self.cutoff_spinbox.setMaximum(100)
+        self.cutoff_spinbox.setValue(2)
         #self.analyze_button = QtGui.QPushButton("&Analyze >>")
         
         self.left_layout = QtGui.QVBoxLayout(self.left_panel)
@@ -82,4 +94,9 @@ class LuminosoUI(QtGui.QWidget):
     def set_num_axes(self, value):
         self.axes_spinbox.setValue(value)
 
-        
+    def get_concept_cutoff(self):
+        return self.cutoff_spinbox.value()
+
+    def set_concept_cutoff(self, value):
+        self.cutoff_spinbox.setValue(value)
+

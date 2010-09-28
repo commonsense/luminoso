@@ -16,7 +16,7 @@ def render_info_page(results):
         return ""
     key_concepts = {}
     for key, values in results.stats['key_concepts'].items():
-        kstr = ["%s (%d%%)" % (concept.encode('utf-8'), float(value*100))
+        kstr = [u"%s (%1.1f%%)" % (concept, float(value*100))
                 for concept, value in values]
         key_concepts[key] = kstr
     core = results.stats['core']
@@ -29,8 +29,10 @@ def default_info_page(study):
     study_name = study.name
     return default_template.render(locals())
 
-template = Template("""
-<html><body>
+template = Template(u"""
+<html>
+<head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/></head>
+<body>
 <h2>Results for {{study_name}}</h2>
 <p>Analyzed at {{timestamp}}</p>
 
