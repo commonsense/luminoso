@@ -19,7 +19,7 @@ import hashlib
 import chardet
 logger = logging.getLogger('luminoso')
 
-from standalone_nlp.lang_en import nltools as en_nl
+from standalone_nlp.lang_en import en_nl
 from csc import divisi2
 from csc.divisi2.blending import blend
 from csc.divisi2.ordered_set import OrderedSet

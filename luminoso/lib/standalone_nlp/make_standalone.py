@@ -4,7 +4,6 @@ from csc.nl import get_nl
 import cPickle as pickle
 import local_unpickle
 
-
 def make_standalone(lcode):
     nl = get_nl(lcode)
     with open('lang_%s.py' % lcode, 'w') as out_py:
@@ -30,3 +29,4 @@ def make_standalone(lcode):
 
 if __name__ == '__main__':
     make_standalone('en')
+    make_standalone('zh')

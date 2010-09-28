@@ -3,7 +3,6 @@ import re
 from PyQt4.QtCore import Qt, QRectF as Rect, QPointF as Point, QLineF as Line, QSize, QMutex, QObject, QString, QTimer, SIGNAL
 from PyQt4.QtGui import QApplication, QColor, QWidget, QImage, QPainter, QPen, QFont, QFontMetrics, QVBoxLayout, QComboBox, QLabel, QPushButton, QGridLayout, QCompleter
 import numpy as np
-from csc.util.persist import get_picklecached_thing
 from collections import defaultdict
 from csc import divisi2
 from luminoso import svgfig

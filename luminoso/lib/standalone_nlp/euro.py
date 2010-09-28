@@ -1,5 +1,5 @@
 import string
-from standalone_nlp.nl import NLTools, get_nl, get_wordlist, get_mapping
+from csc.nl import NLTools, get_nl, get_wordlist, get_mapping
 import re
 
 def doctest_globals():
