@@ -586,9 +586,8 @@ class StudyDirectory(QtCore.QObject):
      - caching analysis results for speed
     '''
     def __init__(self, dir):
-        self.dir = dir.rstrip(os.path.sep)
         QtCore.QObject.__init__(self)
-
+        self.dir = dir.rstrip(os.path.sep)
         self.load_settings()
 
     @staticmethod
