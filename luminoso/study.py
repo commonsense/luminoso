@@ -599,9 +599,8 @@ class StudyDirectory(QtCore.QObject):
             os.mkdir(destdir)
             for dir in ['Canonical', 'Documents', 'Matrices', 'Results']:
                 os.mkdir(dest_path(dir))
-            shutil.copy(os.path.join(package_dir, 'study_skel', 'Matrices',
-            'conceptnet_en.assoc.smat'), os.path.join(destdir, 'Matrices',
-            'conceptnet_en.assoc.smat'))
+            shutil.copy(os.path.join(package_dir, 'study_skel', 'Matrices', 'conceptnet_en.assoc.smat'),
+                        os.path.join(destdir, 'Matrices', 'conceptnet_en.assoc.smat'))
             write_json_to_file({}, dest_path('settings.json'))
         except (IOError, OSError):
             raise StudyLoadError
