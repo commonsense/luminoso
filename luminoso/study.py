@@ -19,7 +19,7 @@ import hashlib
 import chardet
 logger = logging.getLogger('luminoso')
 
-from standalone_nlp.lang_en import nltools as en_nl
+from standalone_nlp.lang_en import en_nl
 from csc import divisi2
 from csc.divisi2.blending import blend
 from csc.divisi2.ordered_set import OrderedSet
@@ -586,9 +586,8 @@ class StudyDirectory(QtCore.QObject):
      - caching analysis results for speed
     '''
     def __init__(self, dir):
-        self.dir = dir.rstrip(os.path.sep)
         QtCore.QObject.__init__(self)
-
+        self.dir = dir.rstrip(os.path.sep)
         self.load_settings()
 
     @staticmethod
@@ -599,9 +598,8 @@ class StudyDirectory(QtCore.QObject):
             os.mkdir(destdir)
             for dir in ['Canonical', 'Documents', 'Matrices', 'Results']:
                 os.mkdir(dest_path(dir))
-            shutil.copy(os.path.join(package_dir, 'study_skel', 'Matrices',
-            'conceptnet_en.assoc.smat'), os.path.join(destdir, 'Matrices',
-            'conceptnet_en.assoc.smat'))
+            shutil.copy(os.path.join(package_dir, 'study_skel', 'Matrices', 'conceptnet_en.assoc.smat'),
+                        os.path.join(destdir, 'Matrices', 'conceptnet_en.assoc.smat'))
             write_json_to_file({}, dest_path('settings.json'))
         except (IOError, OSError):
             raise StudyLoadError

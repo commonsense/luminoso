@@ -8,7 +8,8 @@ from stat import ST_MTIME
 if 'py2exe' in sys.argv:
     import py2exe
 
-import modulefinder#, csc.util, csc.divisi2
+import modulefinder
+
 for p in sys.path:
    modulefinder.AddPackagePath(__name__, p)
 sys.path.append('luminoso/lib')
@@ -29,7 +30,9 @@ classifiers=[
     'Topic :: Software Development',
     'Topic :: Text Processing :: Linguistic',]
 
-INCLUDES = ["sip", "PySide.QtCore", "PySide.QtGui", "PySide", 'csc.util', 'csc.divisi2', 'spyderlib', 'standalone_nlp.nl', 'standalone_nlp.lang_en', 'standalone_nlp.euro', 'standalone_nlp.trie', 'jinja2', 'numpy', 'chardet']
+INCLUDES = ["sip", "PySide.QtCore", "PySide.Qt", "PySide.QtGui", "PySide",
+            'csc.divisi2', 'spyderlib', 'csc.nl',
+            'standalone_nlp.lang_en', 'jinja2', 'numpy', 'chardet']
 DATA_FILES = ['icons']
 
 setup(
@@ -47,7 +50,7 @@ setup(
     app=['luminoso/run_luminoso.py'],
     scripts=['luminoso/run_luminoso.py'],
     windows=[{'script': 'luminoso/run_luminoso.py'}],
-    install_requires=['csc-utils >= 0.4.2', 'divisi2', 'ipython >= 0.9.1', 'jinja2', 'chardet'],
+    install_requires=['csc-utils >= 0.5', 'divisi2', 'ipython >= 0.9.1', 'jinja2', 'chardet'],
     package_data={'csc.nl': ['mblem/*.pickle', 'en/*.txt']},
     include_package_data=True,
     #data_files=DATA_FILES,

@@ -1,0 +1,88 @@
+How the Mac build works
+=======================
+
+Running the build
+-----------------
+Okay, the most important thing is being able to make the build run when you
+need it. The easy way is to do this on Rob's laptop where it's already set up.
+Otherwise...
+
+- Make sure you have appropriate `csc` and `pyinstaller` directories. (More on
+  this below!)
+- `mkdir dist` if you don't already have a `dist` directory.
+- Make a `DMGSkeleton` directory, containing whatever you want in the disk
+  image besides the app.
+- Edit Info.plist. Change the version number as appropriate. Yes, you do have
+  to change the version number in a bunch of places to make a release.
+- Run ``./mac_build.sh X.Y``, where X.Y is the version number you want the
+  resulting disk image to have.
+
+Setting up PyInstaller
+----------------------
+PyInstaller is a magical piece of software that takes in a Python application
+and spits out a malformed app bundle. This would not sound that impressive
+until you compare it to every other attempt at Python packaging for Mac. It
+almost works, and that's *amazing*.
+
+Many of the commands in `mac_build.sh` are there to drop files into the right
+places after PyInstaller neglects to. But there's a couple of fixes you have to
+make ahead of time.
+
+As of SVN version 897, PyInstaller-built Mac apps will leave a duplicate icon
+perpetually bouncing on the Dock. There is a hacky workaround for this at 
+http://www.pyinstaller.org/ticket/156 (which, puzzlingly, claims that the bug
+is fixed).
+
+Yes, that's right. You need to edit PyInstaller's `main.c` and comment out from
+the `sleep()` call to the end of the program before you compile it.
+
+Besides that, compiling PyInstaller is an easy process. The instructions claim
+to be for Linux but they work just fine on a Mac.
+
+Once you've done that, put the result in `pyinstaller/`, under the top level
+directory of Luminoso.
+
+Setting up the csc directory
+----------------------------
+PyInstaller doesn't understand namespace packages. Can you blame it? To make
+your built Luminoso work, you need to make a combined `csc/` directory inside
+the top level of Luminoso.
+
+Make a directory called `csc/` and touch `csc/__init__.py`. Then, find
+appropriate `csc/divisi2`, `csc/util`, and `csc/nl` directories and `cp -a`
+them in.
+
+.. note::
+    
+    Watch out, you're on a Mac! That means copying `csc/divisi2/` means
+    something rather different from copying `csc/divisi2`. Use the one without
+    the slash.
+
+Then you should be ready to run the build script.
+
+The gritty details
+------------------
+So what really happens in the build script?
+
+1. It cleans up old build results.
+2. It runs PyInstaller. PyInstaller gets its instructions from a Python
+   fragment called `luminoso.spec`. The version number in it probably doesn't
+   matter because we overwrite it. Notice that it is given a bunch of directory
+   names to add to the path, like `luminoso/lib`.
+3. PyInstaller automagically scans for dependencies, gets most of them right,
+   and piles all the compiled results in the `dist/luminoso` directory. It also
+   outputs `dist/Luminoso.app`, with most of the stuff missing because it's in
+   `dist/luminoso`.
+4. `mac_build.sh` corrects for this by copying the contents of `dist/luminoso`
+   into `dist/Luminoso.app/Contents/MacOS`. It also pulls in a random Qt file
+   that PyInstaller forgot, `qt_menu.nib`.
+5. The script overwrites the new app's Info.plist with our own. It puts the
+   icons in the MacOS directory (yes, they should go in Resources, so sue me)
+   and, as a finishing touch, gives the app itself an icon (`luminoso.icns`).
+   You can make a new .icns file using `/Developer/Tools/Icon Composer`.
+6. You have a working app bundle! Now it copies it into the prepared
+   `DMGSkeleton` directory, and uses `hdiutil` to make an honest-to-blog HFS+
+   image out of it.
+7. It cleans up the mess PyInstaller left behind, and copies the resulting
+   disk image to anemone so it shows up at http://csc.media.mit.edu/dist.
+   Ta-da!

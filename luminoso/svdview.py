@@ -3,7 +3,6 @@ import re
 from PySide.QtCore import Qt, QRectF as Rect, QPointF as Point, QLineF as Line, QSize, QMutex, QObject, QTimer, SIGNAL
 from PySide.QtGui import QApplication, QColor, QWidget, QImage, QPainter, QPen, QFont, QFontMetrics, QVBoxLayout, QComboBox, QLabel, QPushButton, QGridLayout, QCompleter
 import numpy as np
-from csc.util.persist import get_picklecached_thing
 from collections import defaultdict
 from csc import divisi2
 from luminoso import svgfig
@@ -329,13 +328,16 @@ class PointLayer(Layer):
         for i in xrange(self.luminoso.npoints):
             x, y = self.luminoso.screenpts[i]
             r, g, b = self.luminoso.colors[i]
-            mag = max(0.1, self.sizes[i] / pixelsize * 4)
+            mag = max(0.1, self.sizes[i] / pixelsize * 2)
             color = svgfig.rgb(r, g, b, maximum=255.)
-            circle = svgfig.Ellipse(x, y, mag, 0, mag, fill=color, stroke='black')
-            if self.luminoso.labels[i].endswith('.txt'):
-                circle.attr['stroke-width'] = '1.0'
+            circle = svgfig.Ellipse(x, y, mag, 0, mag, fill=color)
+            if self.luminoso.labels[i].endswith('.txt'): continue
+            if self.luminoso.labels[i].startswith('#'):
+                circle.attr['fill'] = 'white'
+                circle.attr['stroke'] = color
+                circle.attr['stroke-width'] = '1.5'
             else:
-                circle.attr['stroke-width'] = '0.2'
+                circle.attr['stroke-width'] = '0.0'
             circles.append(circle)
         return svgfig.Fig(*circles)
     
@@ -362,6 +364,19 @@ class LabelLayer(Layer):
         self.whichlabels = quadrange(self.luminoso.npoints, npoints)
         self.magnitudes = np.asarray(self.luminoso.magnitudes)
         self.update_order()
+        self.sizes = self.calculate_magnitudes()
+
+    def calculate_magnitudes(self):
+        """
+        Assign every point a size according to its distance from the origin.
+        """
+        if self.luminoso.magnitudes is not None:
+            sizes = np.sqrt(self.luminoso.magnitudes)
+        else:
+            sizes = np.sum(self.luminoso.array ** 2, axis=-1) ** 0.25
+        sizes /= (np.sum(sizes) / len(sizes))
+        sizes *= self.luminoso.scale * np.sqrt(len(sizes)) / 1000000
+        return sizes
 
     def draw(self, painter):
         labeled_so_far = 0
@@ -402,17 +417,20 @@ class LabelLayer(Layer):
         texts = []
         for i in xrange(self.luminoso.npoints):
             label = self.luminoso.labels[i]
+            if label.endswith('.txt'): continue
             bold = False
             x, y = self.luminoso.screenpts[i]
             r, g, b = self.luminoso.colors[i] * 0.5
-            mag = self.magnitudes[i]
-            if label.endswith('.txt'):
-                label = label[:-4]
+            pixelsize = self.luminoso.pixel_size()
+            mag = max(0.1, self.sizes[i] / pixelsize)
+            if ' ' in label: mag *= 2
+            if label.startswith('#'):
+                label = label[1:]
                 bold = True
-                mag = 0.04
+                mag = 0.000004/pixelsize
             color = svgfig.rgb(r, g, b, maximum=255.)
             text = svgfig.Text(str(x), str(y), label, fill=color)
-            text.attr['font-size'] = str(np.sqrt(mag)*40)
+            text.attr['font-size'] = str(np.sqrt(mag)*10)
             if bold: text.attr['font-weight'] = 'bold'
             texts.append(text)
         return svgfig.Fig(*texts)
@@ -500,7 +518,7 @@ class NetworkLayer(Layer):
                     sx, sy = self.luminoso.screenpts[index]
                     tx, ty = self.luminoso.screenpts[sim]
                     line = svgfig.Line(sx, sy, tx, ty, stroke='black', opacity='0.4')
-                    line.attr['stroke-width'] = str(amount/2)
+                    line.attr['stroke-width'] = str(amount)
                     lines.append(line)
         return svgfig.Fig(*lines)
 
@@ -640,6 +658,7 @@ class LinkLayer(Layer):
             painter.drawLines(lines)
     
     def drawSVG(self):
+        return
         lines = []
         for index in xrange(self.luminoso.npoints):
             self.selectEvent(index)
@@ -648,7 +667,7 @@ class LinkLayer(Layer):
                 if target > self.source:
                     tx, ty = self.luminoso.screenpts[target]
                     line = svgfig.Line(sx, sy, tx, ty, stroke='blue', opacity='0.2')
-                    line.attr['stroke-width'] = '0.25'
+                    line.attr['stroke-width'] = '0.4'
                     lines.append(line)
         return svgfig.Fig(*lines)
         
@@ -862,7 +881,7 @@ class SVDViewer(QWidget):
     def components_to_colors(self, coords):
         while coords.shape[1] < 5:
             coords = np.concatenate([coords, -coords, coords], axis=1)
-        return np.clip(np.int32(coords[...,2:5]*80/self.scale + 160), 50, 230)
+        return np.clip(np.int32(coords[...,3:6]*80/self.scale + 160), 50, 230)
     
     def update_screenpts(self):
         self.screenpts = self.components_to_screen(self.array)

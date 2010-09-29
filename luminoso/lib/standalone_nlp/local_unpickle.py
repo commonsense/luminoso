@@ -3,7 +3,7 @@ from StringIO import StringIO
 
 module_subst = {
     'csc.nl': 'standalone_nlp.nl',
-    #'csc.nl.en': 'standalone_nlp.nl',
+    'csc.nl.en': 'standalone_nlp.nl',
     'csc.nl.euro': 'standalone_nlp.euro',
     'csc.nl.mblem.trie': 'standalone_nlp.trie'
 }
