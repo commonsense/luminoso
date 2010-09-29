@@ -1,5 +1,6 @@
 import sys
 import re
+from PyQt4 import QtCore
 from PyQt4.QtCore import Qt, QRectF as Rect, QPointF as Point, QLineF as Line, QSize, QMutex, QObject, QString, QTimer, SIGNAL
 from PyQt4.QtGui import QApplication, QColor, QWidget, QImage, QPainter, QPen, QFont, QFontMetrics, QVBoxLayout, QComboBox, QLabel, QPushButton, QGridLayout, QCompleter
 import numpy as np
@@ -45,6 +46,8 @@ class Projection(QObject):
     space is called the "projection plane", representing projection
     coordinates.
     """
+    rotated = QtCore.pyqtSignal()
+    
     def __init__(self, k):
         QObject.__init__(self)
         self.k = k
@@ -97,7 +100,7 @@ class Projection(QObject):
         magnitude = np.sum(delta**2)
         power = np.tanh(magnitude)/10
         self.orthogonalize(power=power)
-        self.emit(SIGNAL('rotated()'))
+        self.rotated.emit()
 
     def timerEvent(self):
         """
@@ -122,12 +125,12 @@ class Projection(QObject):
         self.target_matrix = np.concatenate(
             [self.target_matrix[-1:], self.target_matrix[:-1]],
             axis=0)
-        self.emit(SIGNAL('rotated()'))
+        self.rotated.emit()
     def prev_axis(self):
         self.target_matrix = np.concatenate(
             [self.target_matrix[1:], self.target_matrix[:1]],
             axis=0)
-        self.emit(SIGNAL('rotated()'))
+        self.rotated.emit()
 
 class Layer(object):
     """
@@ -1077,7 +1080,7 @@ class SVDViewPanel(QWidget):
         self.viewer = SVDViewer.make_svdview(docs, projections, magnitudes, canonical)
         self.layout.addWidget(self.viewer, 0, 0, 1, 7)
         self.setup_choosers(canonical)
-        self.connect(self.viewer.projection, SIGNAL('rotated()'), self.update_choosers)
+        self.viewer.projection.rotated.connect(self.update_choosers)
         self.connect(self.viewer, SIGNAL('svdSelectEvent()'), self.viewer_selected)
     
     def viewer_selected(self):
@@ -1163,7 +1166,7 @@ class SVDViewPanel(QWidget):
 
     def deactivate(self):
         if self.viewer is not None:
-            self.disconnect(self.viewer.projection, SIGNAL('rotated()'), self.update_choosers)
+            self.viewer.projection.rotated.disconnect(self.update_choosers)
             self.disconnect(self.viewer, SIGNAL('svdSelectEvent()'), self.viewer_selected)
             self.viewer.hide()
             del self.viewer

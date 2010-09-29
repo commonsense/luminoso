@@ -78,9 +78,9 @@ class MainWindow(QtGui.QMainWindow):
         self.ui.show_info(DEFAULT_MESSAGE)
         
         # Set up signals
-        self.connect(self.ui.tree_view, QtCore.SIGNAL("clicked(QModelIndex)"), self.select_document)
-        self.connect(self.ui.axes_spinbox, QtCore.SIGNAL("valueChanged(int)"), self.set_num_axes)
-        self.connect(self.ui.cutoff_spinbox, QtCore.SIGNAL("valueChanged(int)"), self.set_concept_cutoff)
+        self.ui.tree_view.clicked.connect(self.select_document)
+        self.ui.axes_spinbox.valueChanged.connect(self.set_num_axes)
+        self.ui.cutoff_spinbox.valueChanged.connect(self.set_concept_cutoff)
         self.connect(self.ui.svdview_panel, QtCore.SIGNAL("svdSelectEvent()"), self.svdview_select)
 
         self.setup_menus()
