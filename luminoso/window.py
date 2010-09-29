@@ -87,8 +87,8 @@ class MainWindow(QtGui.QMainWindow):
         # Disable elements that require a study loaded.
         self.study_loaded(False)
 
-        self.connect(self.ui.search_box, QtCore.SIGNAL('returnPressed()'), self.toolbar_search)
-        self.connect(self.ui.search_button, QtCore.SIGNAL('clicked()'), self.toolbar_search)
+        self.ui.search_box.returnPressed.connect(self.toolbar_search)
+        self.ui.search_button.clicked.connect(self.toolbar_search)
         self.toolbar.addWidget(self.ui.search_panel)
 
     def __del__(self):
@@ -114,6 +114,7 @@ class MainWindow(QtGui.QMainWindow):
             info = self.results.get_concept_info(label)
             if info is not None: self.ui.show_info(info)
 
+    @QtCore.pyqtSlot()
     def toolbar_search(self):
         self.search(self.ui.search_box.text())
 
@@ -150,7 +151,7 @@ class MainWindow(QtGui.QMainWindow):
         else:
             action = QtGui.QAction(name, self)
         self.actions[name] = action
-        self.connect(action, QtCore.SIGNAL('triggered()'), func)
+        action.triggered.connect(func)
         self.menus[menu].addAction(action)
         if shortcut is not None:
             action.setShortcut(shortcut)
