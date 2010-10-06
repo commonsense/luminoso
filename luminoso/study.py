@@ -221,6 +221,10 @@ class Study(QtCore.QObject):
         # smaller.
         for concept, count in concept_counts.to_sparse().named_items():
             if count >= self.config('concept_cutoff'): valid_concepts.add(concept)
+        if len(valid_concepts) == 0:
+            # No valid concepts. This unfortunately happens when
+            # concept_cutoff is too low.
+            return None
 
         entries = []
         for doc in self.study_documents:
@@ -239,6 +243,7 @@ class Study(QtCore.QObject):
                                 entries.append( (value1*value2/2, concept1, concept2) )
                                 entries.append( (value1*value2/2, concept2, concept1) )
                 prev_concepts = concepts
+        assert len(entries) > 0
         return divisi2.SparseMatrix.square_from_named_entries(entries).squish()
     
     def get_blend(self):
