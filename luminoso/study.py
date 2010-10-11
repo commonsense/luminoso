@@ -731,12 +731,14 @@ def run_study(dirname):
     study = StudyDirectory(dirname)
     study.analyze()
 
-import sys
-if __name__ == '__main__':
-    DO_PROFILE=False
+def main():
     logging.basicConfig(level=logging.INFO)
     if len(sys.argv) > 1:
         run_study(sys.argv[1])
     else:
-        run_study('../ThaiFoodStudy')
+        print 'Run "luminoso-study StudyDir" to analyze a study directory.'
+
+import sys
+if __name__ == '__main__':
+    main()
 

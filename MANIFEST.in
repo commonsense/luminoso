@@ -1,5 +1,3 @@
 recursive-include ThaiFoodStudy *
-recursive-include SoftwareStudy *
 recursive-include study_skel *
 recursive-include icons *
-recursive-include AnalogySpace *

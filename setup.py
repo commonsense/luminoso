@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-VERSION = "1.3.0"
+VERSION = "1.3.1"
 
 from setuptools import setup, find_packages
 import os.path, sys
@@ -47,7 +47,7 @@ setup(
     ext_modules = [],
     packages=find_packages()+['icons', 'study_skel'],
     app=['luminoso/run_luminoso.py'],
-    scripts=['luminoso/run_luminoso.py'],
+    scripts=['luminoso/run_luminoso.py', 'luminoso/study.py'],
     windows=[{'script': 'luminoso/run_luminoso.py'}],
     install_requires=['csc-utils >= 0.5', 'divisi2', 'ipython >= 0.9.1', 'jinja2', 'chardet'],
     package_data={'csc.nl': ['mblem/*.pickle', 'en/*.txt']},
@@ -64,7 +64,8 @@ setup(
         },
     },
 
-    entry_points={'gui_scripts': ['luminoso = luminoso.run_luminoso:main']},
+    entry_points={'gui_scripts': ['luminoso = luminoso.run_luminoso:main'],
+                  'console_scripts': ['luminoso-study = luminoso.study:main']},
 )
 
 '''
