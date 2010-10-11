@@ -98,13 +98,13 @@ def extract_concepts_from_words(words):
     pos_tagged_words = []
     positive = True
     for word in words:
-        if word in EXTRA_STOPWORDS: continue
         if word.startswith('#-'):
             neg_tagged_words.append(word)
         elif word.startswith('#'):
             pos_tagged_words.append(word)
         elif word.lower() in NEGATION:
             positive = False
+        elif word.lower() in EXTRA_STOPWORDS: continue
         else:
             if positive:
                 positive_words.append(word)
