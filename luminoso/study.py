@@ -224,6 +224,10 @@ class Study(QtCore.QObject):
         # smaller.
         for concept, count in concept_counts.to_sparse().named_items():
             if count >= self.config('concept_cutoff'): valid_concepts.add(concept)
+        if len(valid_concepts) == 0:
+            # No valid concepts. This unfortunately happens when
+            # concept_cutoff is too low.
+            return None
 
         entries = []
         for doc in self.study_documents:
@@ -242,6 +246,7 @@ class Study(QtCore.QObject):
                                 entries.append( (value1*value2/2, concept1, concept2) )
                                 entries.append( (value1*value2/2, concept2, concept1) )
                 prev_concepts = concepts
+        assert len(entries) > 0
         return divisi2.SparseMatrix.square_from_named_entries(entries).squish()
     
     def get_blend(self):
@@ -589,9 +594,8 @@ class StudyDirectory(QtCore.QObject):
      - caching analysis results for speed
     '''
     def __init__(self, dir):
-        self.dir = dir.rstrip(os.path.sep)
         QtCore.QObject.__init__(self)
-
+        self.dir = dir.rstrip(os.path.sep)
         self.load_settings()
 
     @staticmethod
@@ -602,9 +606,8 @@ class StudyDirectory(QtCore.QObject):
             os.mkdir(destdir)
             for dir in ['Canonical', 'Documents', 'Matrices', 'Results']:
                 os.mkdir(dest_path(dir))
-            shutil.copy(os.path.join(package_dir, 'study_skel', 'Matrices',
-            'conceptnet_en.assoc.smat'), os.path.join(destdir, 'Matrices',
-            'conceptnet_en.assoc.smat'))
+            shutil.copy(os.path.join(package_dir, 'study_skel', 'Matrices', 'conceptnet_en.assoc.smat'),
+                        os.path.join(destdir, 'Matrices', 'conceptnet_en.assoc.smat'))
             write_json_to_file({}, dest_path('settings.json'))
         except (IOError, OSError):
             raise StudyLoadError
