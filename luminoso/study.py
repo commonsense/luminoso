@@ -9,7 +9,10 @@ if __name__ == '__main__':
     sys.path.extend([os.path.join(os.path.dirname(sys.argv[0]), "lib"),
                      os.path.dirname(sys.argv[0])])
 
-from PyQt4 import QtCore
+try:
+    from PyQt4 import QtCore
+except ImportError:
+    from luminoso import fake_qt as QtCore
 import os, codecs, time
 import cPickle as pickle
 import numpy as np
@@ -33,7 +36,7 @@ import shutil
 # what is going on.
 SUBTRACT_MEAN = False
 
-EXTRA_STOPWORDS = ['also', 'not', 'without', 'ever', 'because', 'then', 'than', 'do', 'just', 'how', 'out', 'much']
+EXTRA_STOPWORDS = ['also', 'not', 'without', 'ever', 'because', 'then', 'than', 'do', 'just', 'how', 'out', 'much', 'both', 'other']
 
 try:
     import json
@@ -127,7 +130,7 @@ def entry_count(vec):
     return np.sum(np.abs(vec))
 
 DEFAULT_SETTINGS = {
-    'axes': 20,
+    'axes': 50,
     'concept_cutoff': 2
 }
 
@@ -721,7 +724,7 @@ class StudyDirectory(QtCore.QObject):
             print "Skipping outdated analysis."
             return None
 
-def test(dirname):
+def run_study(dirname):
     study = StudyDirectory(dirname)
     study.analyze()
 
@@ -729,16 +732,8 @@ import sys
 if __name__ == '__main__':
     DO_PROFILE=False
     logging.basicConfig(level=logging.INFO)
-    if DO_PROFILE:
-        import cProfile as profile
-        import pstats
-        profile.run('test()', 'study.profile')
-        p = pstats.Stats('study.profile')
-        p.sort_stats('time').print_stats(50)
+    if len(sys.argv) > 1:
+        run_study(sys.argv[1])
     else:
-        if len(sys.argv) > 1:
-            test(sys.argv[1])
-        else:
-            test('../ThaiFoodStudy')
-
+        run_study('../ThaiFoodStudy')
 
