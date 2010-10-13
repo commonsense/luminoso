@@ -4,9 +4,6 @@ from luminoso import study
 
 '''
 This script allows for users to input CSV files and convert them into luminoso ready study files.
-
-The code is not ready yet, so it's not called within Luminoso. It's targeted
-for Luminoso 1.4.
 '''
 class CSVFile(object):
     '''
@@ -59,7 +56,7 @@ class CSVReader():
         Clear any unwanted formating from the tags. Remember: Tag names will be used to name the files.
         '''
         #Note: Add any other code to remove unwanted format here.
-        return str.replace('\n', '').replace('?', '')
+        return str.replace('\n', '').replace('?', '').replace(' ','_')
 
     def find_tags(self, csv_file):
         '''
@@ -81,6 +78,7 @@ class CSVReader():
                     #Add the last tag if necessary.
                     if row[item] != '':
                         tags.extend(['#'+self.clear_tag(row[item])])
+                        count+=1
                     #If the current row has more items than the previous one, then update the max and
                     #the tags.
                     if max_count < count:
@@ -140,6 +138,7 @@ class CSVReader():
                 tags_calc[tags['order'][pointer%tag_len]].extend([x])
             tags[tags['order'][pointer%tag_len]].extend([x])
             pointer += 1
+            
         for row in csv_file:
             for j in row[:tag_len]:
                 if tags['order'][pointer%tag_len].find('repeated'):
@@ -148,101 +147,43 @@ class CSVReader():
                     tags_calc[tags['order'][pointer%tag_len]].extend([x])
                 tags[tags['order'][pointer%tag_len]].extend([j])
                 pointer += 1
-                
-        #List of tuples in the form (tag: {collumn_tag, edited_final_tag}). Used to replace words that
-        #were chosen as tags.
-        replacement_tags = {}.fromkeys(tags.keys())
-        for t in replacement_tags.keys():
-            replacement_tags[t] = []
 
-        #Length of the collumns.
-        len_col = len(tags[tags.keys()[0]])
-        
-        #Add the Documents tags to the tag file.
-        for tag in tags_calc.keys():
+        new_tags = []
+        for tag in tags:
             if tag == 'order':
                 continue
-            else:
-                #Create Canonical Document of tags.
-                f = open(self.csv_file.canonical_path()+os.sep+'Tag_'+tag+'.txt', 'w')
-                f.write(tag.replace(' ','_'))
-                f.close()
-            
-            #Now look at the words located bellow the tagged column and look for possible
-            #canonical words.
-            collumn =tags_calc[tag]
-            collumn.sort()
-            i = 0
-
-            while i < len(collumn):
-                if collumn[i].lower() == 'yes' or collumn[i].lower() == 'no':
-                    #Yes or No answer, thus we want positive and negative tags.
-                    yes = tag.replace(' ','_')+'_yes\n'
-                    no = '-'+tag.replace(' ','_')+'_no\n'
-
-                    replacement_tags[tag] = {'yes': yes}
-                    replacement_tags[tag]['no'] = no
-
-                    f = open(self.csv_file.canonical_path()+os.sep+'Tag_'+yes+'.txt', 'w')
-                    f.write(yes)
-                    f.close()
-
-                    f = open(self.csv_file.canonical_path()+os.sep+'Tag_'+no+'.txt', 'w')
-                    f.write(no)
-                    f.close()
-                    break
-                elif collumn.count(collumn[i]) <= 2:
-                    if len(collumn[i]) > 5:
-                        #Assume that the collumn contains descriptions rather than possible tags.
-                        break
-                    else:
-                        #Else, maybe this is just not a tag but the collumn may contain tags.
-                        i += 1
-                        continue
-                else:
-                    #If it's repeated enough then make it a tag. Always getting rid of the empty items
-                    #first.
-                    if collumn[i] != '' and collumn[i] != ' ':
-                        #If we already added it, then ignore it.
-                        if tag.replace(' ','_')+'_'+collumn[i].replace(' ','_') in tags_calc:
-                            i += collumn.count(collumn[i])
-                            continue
-                        #We add new tags here so that they are not repeated.
-                        tags_calc[tag.replace(' ','_')+'_'+collumn[i].replace(' ','_')] = []
-                        #This is the new accepted tag.
-                        new_tag = tag.replace(' ','_')+'_'+collumn[i].replace(' ','_')
-                        if replacement_tags[tag] == []:
-                            replacement_tags[tag] = {collumn[i] : new_tag}
-                        else:
-                            replacement_tags[tag][collumn[i]] = new_tag
-                        #Write tags into the canonical document.
-                        f = open(self.csv_file.canonical_path()+os.sep+'Tag_'+new_tag+'.txt', 'w')
-                        f.write(new_tag+'\n')
+            for i in range(len(tags[tag])):
+                total_minus_empty = len(tags[tag])-tags[tag].count('')
+                #If item is repeated more than a fifth of the time, treat as tag!
+                if tags[tag].count(tags[tag][i]) > total_minus_empty/5 and len(tags[tag][i]) > 0:
+                    tags[tag][i] = self.clear_tag(tag+'_'+tags[tag][i])
+                    if tags[tag][i] not in new_tags:
+                        new_tags.extend([tags[tag][i]])
+                        f = open(self.csv_file.canonical_path()+os.sep+tags[tag][i]+'.txt', 'w')
+                        f.write(tags[tag][i])
                         f.close()
-                    i += collumn.count(collumn[i])
-            i = 0
         
         #Store values by substracting them from the ordered dictionary we created at the beginning,
         #namely 'tags'. This extracts words from the dictionary and appends them to a list, then
         #creates a text document with the list's contents.
         counter = 0
         r = []
-        while counter < len_col:
+        while counter < len(tags[tags.keys()[0]]):
             for tag in tags['order']:
                 if len(tags[tag]) == 0:
                     continue
-                item = tags[tag][counter]
-                if item in replacement_tags[tag]:
-                    r.extend([replacement_tags[tag][item]])
                 else:
+                    item = tags[tag][counter]
                     r.extend([item])
             self.create_file(counter, r)
             counter += 1
             r = []
-
+            
 ##The script can run automatically by uncommenting the code bellow and giving it a path in place
 ##of the "user_inputted_path".
+##path = 'C://Documents and Settings//Rafael//Desktop//luminoso//examples//example.csv'
+##path2 = 'C://Documents and Settings//Rafael//Desktop//luminoso//luminoso//csv_reader//001-866.csv'
 ##if __name__ == '__main__':
-##    csv_file = CSVFile(user_inputted_path)
+##    csv_file = CSVFile(path)
 ##    reader = CSVReader(csv_file)
 ##    reader.read_csv()

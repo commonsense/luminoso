@@ -2,13 +2,16 @@ from __future__ import with_statement
 from PyQt4 import QtCore, QtGui
 from PyQt4.QtCore import Qt
 
-from luminoso.study import StudyDirectory, Study, StudyLoadError
+from luminoso.study import StudyDirectory, Study
 from luminoso.ui import LuminosoUI
 from luminoso.batch import progress_reporter
 
 from luminoso.whereami import package_dir, get_icon
 from luminoso.simplethread import ThreadRunner
 
+from luminoso.csv_reader import *
+
+from webbrowser import open as webo
 
 import sys, os, time
 
@@ -18,10 +21,10 @@ logger = logging.getLogger('luminoso')
 
 logger.setLevel(logging.INFO)
 
-VERSION = "1.3.2"
+VERSION = "1.3.0"
 DEFAULT_MESSAGE = """
 <h2>Luminoso %(VERSION)s</h2>
-<p>Choose "New Study" or "Open Study" to begin.</p>
+<p>Choose "New Study", "Open Study" or "Import CSV File" to begin.</p>
 """ % globals()
 
 class MainWindow(QtGui.QMainWindow):
@@ -77,17 +80,17 @@ class MainWindow(QtGui.QMainWindow):
         self.ui.show_info(DEFAULT_MESSAGE)
         
         # Set up signals
-        self.ui.tree_view.clicked.connect(self.select_document)
-        self.ui.axes_spinbox.valueChanged.connect(self.set_num_axes)
-        self.ui.cutoff_spinbox.valueChanged.connect(self.set_concept_cutoff)
+        self.connect(self.ui.tree_view, QtCore.SIGNAL("clicked(QModelIndex)"), self.select_document)
+        self.connect(self.ui.axes_spinbox, QtCore.SIGNAL("valueChanged(int)"), self.set_num_axes)
+        self.connect(self.ui.cutoff_spinbox, QtCore.SIGNAL("valueChanged(int)"), self.set_concept_cutoff)
         self.connect(self.ui.svdview_panel, QtCore.SIGNAL("svdSelectEvent()"), self.svdview_select)
 
         self.setup_menus()
         # Disable elements that require a study loaded.
         self.study_loaded(False)
 
-        self.ui.search_box.returnPressed.connect(self.toolbar_search)
-        self.ui.search_button.clicked.connect(self.toolbar_search)
+        self.connect(self.ui.search_box, QtCore.SIGNAL('returnPressed()'), self.toolbar_search)
+        self.connect(self.ui.search_button, QtCore.SIGNAL('clicked()'), self.toolbar_search)
         self.toolbar.addWidget(self.ui.search_panel)
 
     def __del__(self):
@@ -113,7 +116,6 @@ class MainWindow(QtGui.QMainWindow):
             info = self.results.get_concept_info(label)
             if info is not None: self.ui.show_info(info)
 
-    @QtCore.pyqtSlot()
     def toolbar_search(self):
         self.search(self.ui.search_box.text())
 
@@ -150,7 +152,7 @@ class MainWindow(QtGui.QMainWindow):
         else:
             action = QtGui.QAction(name, self)
         self.actions[name] = action
-        action.triggered.connect(func)
+        self.connect(action, QtCore.SIGNAL('triggered()'), func)
         self.menus[menu].addAction(action)
         if shortcut is not None:
             action.setShortcut(shortcut)
@@ -162,16 +164,17 @@ class MainWindow(QtGui.QMainWindow):
         self.add_action("&File", "&New study...", self.new_study_dialog, "Ctrl+N", 'actions/document-new.png')
         self.add_action("&File", "&Open study...", self.load_study_dialog, "Ctrl+O", 'actions/document-open.png')
         self.add_action("&File", "&Edit study...", self.edit_study, "Ctrl+E", 'actions/document-properties.png')
-        #self.add_action("&File", "&Import CSV File...", self.csv_study, "Ctrl+I", 'actions/csv_file.png')
+        self.add_action("&File", "&Import CSV File...", self.csv_study, "Ctrl+I", 'actions/csv_file.png')
         self.add_action("&Analysis", "&Analyze", self.analyze, "Ctrl+A", 'actions/go-next.png')
-        self.add_action("&Analysis", "Show Study &Info", self.show_info,
-        "Ctrl+I", "actions/edit-find.png")
+        self.add_action("&Analysis", "Show Study &Info", self.show_info, "Ctrl+I", "actions/edit-find.png")
         self.add_action("&Viewer", "&Reset view", self.ui.svdview_panel.reset_view, "Ctrl+R")
         self.toolbar.addSeparator()
         self.add_action("&Viewer", "&Previous axis", self.ui.svdview_panel.prev_axis, "Ctrl+Left", 'actions/media-seek-backward.png')
         self.add_action("&Viewer", "&Next axis", self.ui.svdview_panel.next_axis, "Ctrl+Right", 'actions/media-seek-forward.png')
         self.add_action("&Viewer", "Save as &SVG...", self.save_svg, "Ctrl+G")
         self.toolbar.addSeparator()
+        self.add_action("&Help", "&About...", self.info_luminoso)
+        self.add_action("&Help", "&Documentation...", self.doc_luminoso)
     
     def save_svg(self):
         filename = QtGui.QFileDialog.getSaveFileName(self, "Choose where to save this SVG", package_dir)
@@ -184,20 +187,22 @@ class MainWindow(QtGui.QMainWindow):
             study = StudyDirectory.make_new(unicode(dirname))
             self.load_study(unicode(dirname))
 
-    #def csv_study(self):
-    #    csv_file = QtGui.QFileDialog.getOpenFileNames(None,"Select a CSV File to open.","/home")
-    #    filename = csv_file[0]
-    #    if filename and filename.endsWith(QtCore.QString('.csv')):
-    #        csv = CSVFile(unicode(filename))
-    #        self.ui.show_info("<h3>Creating Study...</h3><p>Study being located at "
-    #                          +str(csv.study_path)+"</p><p>(this may take a few minutes)</p>")
-    #        reader = CSVReader(csv)
-    #        reader.read_csv()
-    #        self.load_study(unicode(csv.study_path))
-            
-##        else:
-##            print "Please enter a valid CSV File."
-            
+    def csv_study(self):
+        csv_file = QtGui.QFileDialog.getOpenFileNames(None,"Select a CSV File to open.","/home")
+        filename = csv_file[0]
+        if filename and filename.endsWith(QtCore.QString('.csv')):
+            csv = CSVFile(unicode(filename))
+            self.ui.show_info("<h3>Creating Study...</h3><p>Study being located at "
+                              +str(csv.study_path)+"</p><p>(this may take a few minutes)</p>")
+            reader = CSVReader(csv)
+            reader.read_csv()
+            self.load_study(unicode(csv.study_path))
+
+    def info_luminoso(self):
+        webo('http://csc.media.mit.edu/analogyspace/luminoso')
+
+    def doc_luminoso(self):
+        webo('http://csc.media.mit.edu/docs/luminoso/index.html')
 
     def load_study_dialog(self):
         dir = QtGui.QFileDialog.getExistingDirectory()
@@ -326,5 +331,3 @@ class MainWindow(QtGui.QMainWindow):
     #    If Qt is nice enough to ask, how big should our window be?
     #    """
     #    return QtCore.QSize(1000, 800)
-
-
