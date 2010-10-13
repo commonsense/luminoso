@@ -1,5 +1,5 @@
 # -*- mode: python -*-
-version = "1.3.1"
+version = "1.3.2"
 a = Analysis([os.path.join(HOMEPATH,'support/_mountzlib.py'),
 os.path.join(HOMEPATH,'support/useUnicode.py'), 'luminoso/app.py'],
              pathex=['pyinstaller', 

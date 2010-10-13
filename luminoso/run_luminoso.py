@@ -41,6 +41,8 @@ def main(app=None):
         window.show()
         window.activateWindow()
         window.raise_()
+        if len(sys.argv) > 1:
+            window.load_study(sys.argv[1])
         app.setOrganizationName("Common Sense Computing Initiative")
         app.setApplicationName("Luminoso")
         splash.finish(window)

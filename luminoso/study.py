@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 from __future__ import with_statement
 """
 This class provides the model to SVDView's view, calculating a blend of all
