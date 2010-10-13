@@ -148,15 +148,30 @@ class CSVReader():
                 tags[tags['order'][pointer%tag_len]].extend([j])
                 pointer += 1
 
+        confirmed = []
         new_tags = []
         for tag in tags:
             if tag == 'order':
                 continue
             for i in range(len(tags[tag])):
                 total_minus_empty = len(tags[tag])-tags[tag].count('')
+                item_count = tags[tag].count(tags[tag][i])
                 #If item is repeated more than a fifth of the time, treat as tag!
-                if tags[tag].count(tags[tag][i]) > total_minus_empty/5 and len(tags[tag][i]) > 0:
-                    tags[tag][i] = self.clear_tag(tag+'_'+tags[tag][i])
+                #Since we are substituting tags[tag][i] with its new value, we need to store the old
+                #value for future reference as the previous calculation will not help us check if
+                #it is a tag or not.
+                if (item_count > total_minus_empty/5 and len(tags[tag][i]) > 0) or ( (tags[tag][i], tag) in confirmed):
+
+                    if tags[tag][i] not in confirmed:
+                        confirmed.extend([(tags[tag][i], tag)])
+                    if tags[tag][i].lower()[len(tags[tag][i])-3:] == 'yes':
+                        tags[tag][i] = '#yes'
+                    elif tags[tag][i].lower()[len(tags[tag][i])-2:] == 'no':
+                        tags[tag][i] = '#-no'
+                    else:
+                        tags[tag][i] = self.clear_tag(tag+'_'+tags[tag][i])
+
+                        
                     if tags[tag][i] not in new_tags:
                         new_tags.extend([tags[tag][i]])
                         f = open(self.csv_file.canonical_path()+os.sep+tags[tag][i]+'.txt', 'w')
@@ -182,7 +197,7 @@ class CSVReader():
 ##The script can run automatically by uncommenting the code bellow and giving it a path in place
 ##of the "user_inputted_path".
 ##path = 'C://Documents and Settings//Rafael//Desktop//luminoso//examples//example.csv'
-##path2 = 'C://Documents and Settings//Rafael//Desktop//luminoso//luminoso//csv_reader//001-866.csv'
+##path = 'C://Documents and Settings//Rafael//Desktop//luminoso//luminoso//csv_reader//001-866.csv'
 ##if __name__ == '__main__':
 ##    csv_file = CSVFile(path)
 ##    reader = CSVReader(csv_file)
