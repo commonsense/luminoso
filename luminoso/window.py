@@ -9,7 +9,6 @@ from luminoso.batch import progress_reporter
 from luminoso.whereami import package_dir, get_icon
 from luminoso.simplethread import ThreadRunner
 
-from luminoso.csv_reader import *
 
 import sys, os, time
 
@@ -22,7 +21,7 @@ logger.setLevel(logging.INFO)
 VERSION = "1.3.2"
 DEFAULT_MESSAGE = """
 <h2>Luminoso %(VERSION)s</h2>
-<p>Choose "New Study", "Open Study" or "Import CSV File" to begin.</p>
+<p>Choose "New Study" or "Open Study" to begin.</p>
 """ % globals()
 
 class MainWindow(QtGui.QMainWindow):
@@ -163,7 +162,7 @@ class MainWindow(QtGui.QMainWindow):
         self.add_action("&File", "&New study...", self.new_study_dialog, "Ctrl+N", 'actions/document-new.png')
         self.add_action("&File", "&Open study...", self.load_study_dialog, "Ctrl+O", 'actions/document-open.png')
         self.add_action("&File", "&Edit study...", self.edit_study, "Ctrl+E", 'actions/document-properties.png')
-        self.add_action("&File", "&Import CSV File...", self.csv_study, "Ctrl+I", 'actions/csv_file.png')
+        #self.add_action("&File", "&Import CSV File...", self.csv_study, "Ctrl+I", 'actions/csv_file.png')
         self.add_action("&Analysis", "&Analyze", self.analyze, "Ctrl+A", 'actions/go-next.png')
         self.add_action("&Analysis", "Show Study &Info", self.show_info,
         "Ctrl+I", "actions/edit-find.png")
@@ -185,16 +184,16 @@ class MainWindow(QtGui.QMainWindow):
             study = StudyDirectory.make_new(unicode(dirname))
             self.load_study(unicode(dirname))
 
-    def csv_study(self):
-        csv_file = QtGui.QFileDialog.getOpenFileNames(None,"Select a CSV File to open.","/home")
-        filename = csv_file[0]
-        if filename and filename.endsWith(QtCore.QString('.csv')):
-            csv = CSVFile(unicode(filename))
-            self.ui.show_info("<h3>Creating Study...</h3><p>Study being located at "
-                              +str(csv.study_path)+"</p><p>(this may take a few minutes)</p>")
-            reader = CSVReader(csv)
-            reader.read_csv()
-            self.load_study(unicode(csv.study_path))
+    #def csv_study(self):
+    #    csv_file = QtGui.QFileDialog.getOpenFileNames(None,"Select a CSV File to open.","/home")
+    #    filename = csv_file[0]
+    #    if filename and filename.endsWith(QtCore.QString('.csv')):
+    #        csv = CSVFile(unicode(filename))
+    #        self.ui.show_info("<h3>Creating Study...</h3><p>Study being located at "
+    #                          +str(csv.study_path)+"</p><p>(this may take a few minutes)</p>")
+    #        reader = CSVReader(csv)
+    #        reader.read_csv()
+    #        self.load_study(unicode(csv.study_path))
             
 ##        else:
 ##            print "Please enter a valid CSV File."

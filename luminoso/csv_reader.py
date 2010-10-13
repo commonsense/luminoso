@@ -4,6 +4,9 @@ from luminoso import study
 
 '''
 This script allows for users to input CSV files and convert them into luminoso ready study files.
+
+The code is not ready yet, so it's not called within Luminoso. It's targeted
+for Luminoso 1.4.
 '''
 class CSVFile(object):
     '''

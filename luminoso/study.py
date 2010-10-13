@@ -100,7 +100,7 @@ def extract_concepts_from_words(words):
     positive = True
     for word in words:
         if word.startswith('#-'):
-            neg_tagged_words.append(word)
+            neg_tagged_words.append('#'+word[2:])
         elif word.startswith('#'):
             pos_tagged_words.append(word)
         elif word.lower() in NEGATION:
@@ -197,7 +197,7 @@ class Study(QtCore.QObject):
         entries = []
         for doc in self.study_documents:
             self._step(doc.name)
-            for concept, value in doc.extract_concepts_with_negation()[:500]:
+            for concept, value in doc.extract_concepts_with_negation()[:1000]:
                 if (concept not in PUNCTUATION) and (not en_nl.is_blacklisted(concept)):
                     entries.append((value, doc.name, concept))
         documents_matrix = divisi2.make_sparse(entries).normalize_tfidf(cols_are_terms=True)
@@ -246,6 +246,8 @@ class Study(QtCore.QObject):
                             if concept2 in valid_concepts and concept1 != concept2:
                                 entries.append( (value1*value2/2, concept1, concept2) )
                                 entries.append( (value1*value2/2, concept2, concept1) )
+                # Remember tags, but forget words that were too long ago
+                prev_concepts = [p for p in prev_concepts if p[0].startswith('#')]
                 prev_concepts.extend(concepts)
         assert len(entries) > 0
         return divisi2.SparseMatrix.square_from_named_entries(entries).squish()
