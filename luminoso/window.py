@@ -2,14 +2,14 @@ from __future__ import with_statement
 from PyQt4 import QtCore, QtGui
 from PyQt4.QtCore import Qt
 
-from luminoso.study import StudyDirectory, Study
+from luminoso.study import StudyDirectory, Study, StudyLoadError
 from luminoso.ui import LuminosoUI
 from luminoso.batch import progress_reporter
 
 from luminoso.whereami import package_dir, get_icon
 from luminoso.simplethread import ThreadRunner
 
-from luminoso.csv_reader import *
+from luminoso.csv_reader import CSVFile, CSVReader
 
 from webbrowser import open as webo
 
