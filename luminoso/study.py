@@ -688,6 +688,7 @@ class StudyDirectory(QtCore.QObject):
         return study_documents
 
     def get_canonical_documents(self):
+        self._ensure_dir_exists("Canonical")
         canonical_documents = [CanonicalDocument.from_file(filename, name=os.path.basename(filename))
                                for filename in self.listdir('Canonical', text_only=True, full_names=True)]
         return canonical_documents
