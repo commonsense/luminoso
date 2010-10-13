@@ -247,7 +247,8 @@ class Study(QtCore.QObject):
                                 entries.append( (value1*value2/2, concept1, concept2) )
                                 entries.append( (value1*value2/2, concept2, concept1) )
                 # Remember tags, but forget words that were too long ago
-                prev_concepts = [p for p in prev_concepts if p[0].startswith('#')]
+                prev_concepts = [p for p in prev_concepts[:-100] if
+                p[0].startswith('#')] + prev_concepts[-100:]
                 prev_concepts.extend(concepts)
         assert len(entries) > 0
         return divisi2.SparseMatrix.square_from_named_entries(entries).squish()

@@ -400,8 +400,8 @@ class LabelLayer(Layer):
 
             # Mask out areas that already have label text.
             dist = self.distances[lindex]
-            width = int(dist/16) + 6
-            height = int(dist/32) + 2
+            width = int(dist/8) + 9
+            height = int(dist/16) + 3
             xmin = max(x-width, 0)
             xmax = min(x+width, self.luminoso.width)
             ymin = max(y-height, 0)
