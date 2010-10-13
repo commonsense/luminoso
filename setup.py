@@ -31,7 +31,7 @@ classifiers=[
 
 INCLUDES = ["sip", "PyQt4.QtCore", "PyQt4.Qt", "PyQt4.QtGui", "PyQt4",
             'csc.divisi2', 'spyderlib', 'csc.nl',
-            'standalone_nlp.lang_en', 'jinja2', 'numpy', 'chardet']
+            'standalone_nlp.lang_en', 'jinja2', 'numpy', 'chardet', 'pysparse']
 DATA_FILES = ['icons']
 
 setup(

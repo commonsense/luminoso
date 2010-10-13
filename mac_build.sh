@@ -22,5 +22,5 @@ python pyinstaller/Build.py luminoso.spec \
 && cp -r icons dist/Luminoso.app/Contents/MacOS/ \
 && cp -r dist/Luminoso.app DMGSkeleton/Luminoso.app \
 && hdiutil create dist/Luminoso-$1.dmg -volname "Luminoso $1" -fs HFS+ -srcfolder DMGSkeleton \
-&& rm warnluminoso*
+&& rm warnluminoso*\
 && scp dist/Luminoso-$1.dmg anemone.media.mit.edu:/var/www/conceptnet/dist/Luminoso/
