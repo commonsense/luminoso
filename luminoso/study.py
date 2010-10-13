@@ -246,7 +246,7 @@ class Study(QtCore.QObject):
                             if concept2 in valid_concepts and concept1 != concept2:
                                 entries.append( (value1*value2/2, concept1, concept2) )
                                 entries.append( (value1*value2/2, concept2, concept1) )
-                prev_concepts = concepts
+                prev_concepts.extend(concepts)
         assert len(entries) > 0
         return divisi2.SparseMatrix.square_from_named_entries(entries).squish()
     
