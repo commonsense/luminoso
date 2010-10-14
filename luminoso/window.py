@@ -2,14 +2,14 @@ from __future__ import with_statement
 from PyQt4 import QtCore, QtGui
 from PyQt4.QtCore import Qt
 
-from luminoso.study import StudyDirectory, Study
+from luminoso.study import StudyDirectory, Study, StudyLoadError
 from luminoso.ui import LuminosoUI
 from luminoso.batch import progress_reporter
 
 from luminoso.whereami import package_dir, get_icon
 from luminoso.simplethread import ThreadRunner
 
-from luminoso.csv_reader import *
+from luminoso.csv_reader import CSVFile, CSVReader
 
 from webbrowser import open as webo
 
@@ -21,7 +21,7 @@ logger = logging.getLogger('luminoso')
 
 logger.setLevel(logging.INFO)
 
-VERSION = "1.3.0"
+VERSION = "1.3.2"
 DEFAULT_MESSAGE = """
 <h2>Luminoso %(VERSION)s</h2>
 <p>Choose "New Study", "Open Study" or "Import CSV File" to begin.</p>
@@ -80,17 +80,17 @@ class MainWindow(QtGui.QMainWindow):
         self.ui.show_info(DEFAULT_MESSAGE)
         
         # Set up signals
-        self.connect(self.ui.tree_view, QtCore.SIGNAL("clicked(QModelIndex)"), self.select_document)
-        self.connect(self.ui.axes_spinbox, QtCore.SIGNAL("valueChanged(int)"), self.set_num_axes)
-        self.connect(self.ui.cutoff_spinbox, QtCore.SIGNAL("valueChanged(int)"), self.set_concept_cutoff)
+        self.ui.tree_view.clicked.connect(self.select_document)
+        self.ui.axes_spinbox.valueChanged.connect(self.set_num_axes)
+        self.ui.cutoff_spinbox.valueChanged.connect(self.set_concept_cutoff)
         self.connect(self.ui.svdview_panel, QtCore.SIGNAL("svdSelectEvent()"), self.svdview_select)
 
         self.setup_menus()
         # Disable elements that require a study loaded.
         self.study_loaded(False)
 
-        self.connect(self.ui.search_box, QtCore.SIGNAL('returnPressed()'), self.toolbar_search)
-        self.connect(self.ui.search_button, QtCore.SIGNAL('clicked()'), self.toolbar_search)
+        self.ui.search_box.returnPressed.connect(self.toolbar_search)
+        self.ui.search_button.clicked.connect(self.toolbar_search)
         self.toolbar.addWidget(self.ui.search_panel)
 
     def __del__(self):
@@ -116,6 +116,7 @@ class MainWindow(QtGui.QMainWindow):
             info = self.results.get_concept_info(label)
             if info is not None: self.ui.show_info(info)
 
+    @QtCore.pyqtSlot()
     def toolbar_search(self):
         self.search(self.ui.search_box.text())
 
@@ -152,7 +153,7 @@ class MainWindow(QtGui.QMainWindow):
         else:
             action = QtGui.QAction(name, self)
         self.actions[name] = action
-        self.connect(action, QtCore.SIGNAL('triggered()'), func)
+        action.triggered.connect(func)
         self.menus[menu].addAction(action)
         if shortcut is not None:
             action.setShortcut(shortcut)

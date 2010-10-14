@@ -20,7 +20,7 @@ import re, codecs, os, platform, copy, itertools, math, cmath, random, sys, copy
 _epsilon = 1e-5
 
 
-if re.search("windows", platform.system(), re.I):
+if sys.platform in ['win32', 'cygwin']:
   try:
     import _winreg
     _default_directory = _winreg.QueryValueEx(_winreg.OpenKey(_winreg.HKEY_CURRENT_USER, \
