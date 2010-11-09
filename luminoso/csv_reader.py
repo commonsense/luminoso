@@ -165,9 +165,9 @@ class CSVReader():
                     if tags[tag][i] not in confirmed:
                         confirmed.extend([(tags[tag][i], tag)])
                     if tags[tag][i].lower()[len(tags[tag][i])-3:] == 'yes':
-                        tags[tag][i] = '#yes'
+                        tags[tag][i] = '#'+tag[1:]
                     elif tags[tag][i].lower()[len(tags[tag][i])-2:] == 'no':
-                        tags[tag][i] = '#-no'
+                        tags[tag][i] = '#-'+tag[1:]
                     else:
                         tags[tag][i] = self.clear_tag(tag+'_'+tags[tag][i])
 
