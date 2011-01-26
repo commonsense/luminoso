@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-VERSION = "1.3.0"
+VERSION = "1.3.2"
 
 from setuptools import setup, find_packages
 import os.path, sys
@@ -32,7 +32,7 @@ classifiers=[
 
 INCLUDES = ["sip", "PySide.QtCore", "PySide.Qt", "PySide.QtGui", "PySide",
             'csc.divisi2', 'spyderlib', 'csc.nl',
-            'standalone_nlp.lang_en', 'jinja2', 'numpy', 'chardet']
+            'standalone_nlp.lang_en', 'jinja2', 'numpy', 'chardet', 'pysparse']
 DATA_FILES = ['icons']
 
 setup(
@@ -48,7 +48,7 @@ setup(
     ext_modules = [],
     packages=find_packages()+['icons', 'study_skel'],
     app=['luminoso/run_luminoso.py'],
-    scripts=['luminoso/run_luminoso.py'],
+    scripts=['luminoso/run_luminoso.py', 'luminoso/study.py'],
     windows=[{'script': 'luminoso/run_luminoso.py'}],
     install_requires=['csc-utils >= 0.5', 'divisi2', 'ipython >= 0.9.1', 'jinja2', 'chardet'],
     package_data={'csc.nl': ['mblem/*.pickle', 'en/*.txt']},
@@ -65,7 +65,8 @@ setup(
         },
     },
 
-    entry_points={'gui_scripts': ['luminoso = luminoso.run_luminoso:main']},
+    entry_points={'gui_scripts': ['luminoso = luminoso.run_luminoso:main'],
+                  'console_scripts': ['luminoso-study = luminoso.study:main']},
 )
 
 '''

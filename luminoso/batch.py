@@ -10,6 +10,8 @@ class progress_reporter(QtCore.QObject):
 
         self.cur_step = 0
         self.progress.setValue(0)
+        self.progress.setAutoClose(True)
+        self.progress.setAutoReset(True)
 
     def __enter__(self):
         self.progress.forceShow()
@@ -26,7 +28,6 @@ class progress_reporter(QtCore.QObject):
         QtGui.QApplication.processEvents()
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.progress.reset()
-        self.progress.close()
+        self.progress.setValue(self.progress.maximum())
         QtGui.QApplication.processEvents()
         return False # propagate any exceptions

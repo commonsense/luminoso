@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 from __future__ import with_statement
 """
 This class provides the model to SVDView's view, calculating a blend of all
@@ -9,7 +10,10 @@ if __name__ == '__main__':
     sys.path.extend([os.path.join(os.path.dirname(sys.argv[0]), "lib"),
                      os.path.dirname(sys.argv[0])])
 
-from PySide import QtCore
+try:
+    from PySide import QtCore
+except ImportError:
+    from luminoso import fake_qt as QtCore
 import os, codecs, time
 import cPickle as pickle
 import numpy as np
@@ -33,7 +37,7 @@ import shutil
 # what is going on.
 SUBTRACT_MEAN = False
 
-EXTRA_STOPWORDS = ['also', 'not', 'without', 'ever', 'because', 'then', 'than', 'do', 'just', 'how', 'out', 'much']
+EXTRA_STOPWORDS = ['also', 'not', 'without', 'ever', 'because', 'then', 'than', 'do', 'just', 'how', 'out', 'much', 'both', 'other']
 
 try:
     import json
@@ -95,13 +99,13 @@ def extract_concepts_from_words(words):
     pos_tagged_words = []
     positive = True
     for word in words:
-        if word in EXTRA_STOPWORDS: continue
         if word.startswith('#-'):
-            neg_tagged_words.append(word)
+            neg_tagged_words.append('#'+word[2:])
         elif word.startswith('#'):
             pos_tagged_words.append(word)
         elif word.lower() in NEGATION:
             positive = False
+        elif word.lower() in EXTRA_STOPWORDS: continue
         else:
             if positive:
                 positive_words.append(word)
@@ -127,7 +131,7 @@ def entry_count(vec):
     return np.sum(np.abs(vec))
 
 DEFAULT_SETTINGS = {
-    'axes': 20,
+    'axes': 50,
     'concept_cutoff': 2
 }
 
@@ -149,9 +153,11 @@ class Study(QtCore.QObject):
         if key in self.settings: return self.settings[key]
         else: return DEFAULT_SETTINGS[key]
         
+    step = QtCore.pyqtSignal(['QString'])
+
     def _step(self, msg):
         logger.info(msg)
-        self.emit(QtCore.SIGNAL('step(QString)'), msg)
+        self.step.emit(msg)
 
     def get_contents_hash(self):
         def sha1(txt):
@@ -193,7 +199,7 @@ class Study(QtCore.QObject):
         entries = []
         for doc in self.study_documents:
             self._step(doc.name)
-            for concept, value in doc.extract_concepts_with_negation()[:500]:
+            for concept, value in doc.extract_concepts_with_negation()[:1000]:
                 if (concept not in PUNCTUATION) and (not en_nl.is_blacklisted(concept)):
                     entries.append((value, doc.name, concept))
         documents_matrix = divisi2.make_sparse(entries).normalize_tfidf(cols_are_terms=True)
@@ -221,6 +227,10 @@ class Study(QtCore.QObject):
         # smaller.
         for concept, count in concept_counts.to_sparse().named_items():
             if count >= self.config('concept_cutoff'): valid_concepts.add(concept)
+        if len(valid_concepts) == 0:
+            # No valid concepts. This unfortunately happens when
+            # concept_cutoff is too low.
+            return None
 
         entries = []
         for doc in self.study_documents:
@@ -238,7 +248,11 @@ class Study(QtCore.QObject):
                             if concept2 in valid_concepts and concept1 != concept2:
                                 entries.append( (value1*value2/2, concept1, concept2) )
                                 entries.append( (value1*value2/2, concept2, concept1) )
-                prev_concepts = concepts
+                # Remember tags, but forget words that were too long ago
+                prev_concepts = [p for p in prev_concepts[:-100] if
+                p[0].startswith('#')] + prev_concepts[-100:]
+                prev_concepts.extend(concepts)
+        assert len(entries) > 0
         return divisi2.SparseMatrix.square_from_named_entries(entries).squish()
     
     def get_blend(self):
@@ -619,11 +633,7 @@ class StudyDirectory(QtCore.QObject):
 
     def save_settings(self):
         write_json_to_file(self.settings, self.get_settings_file())
-    
-    def _step(self, msg):
-        logger.info(msg)
-        self.emit(QtCore.SIGNAL('step(QString)'), msg)
-    
+
     def study_path(self, path):
         return self.dir + os.path.sep + path
 
@@ -676,6 +686,7 @@ class StudyDirectory(QtCore.QObject):
         return study_documents
 
     def get_canonical_documents(self):
+        self._ensure_dir_exists("Canonical")
         canonical_documents = [CanonicalDocument.from_file(filename, name=os.path.basename(filename))
                                for filename in self.listdir('Canonical', text_only=True, full_names=True)]
         return canonical_documents
@@ -719,24 +730,18 @@ class StudyDirectory(QtCore.QObject):
             print "Skipping outdated analysis."
             return None
 
-def test(dirname):
+def run_study(dirname):
     study = StudyDirectory(dirname)
     study.analyze()
 
+def main():
+    logging.basicConfig(level=logging.INFO)
+    if len(sys.argv) > 1:
+        run_study(sys.argv[1])
+    else:
+        print 'Run "luminoso-study StudyDir" to analyze a study directory.'
+
 import sys
 if __name__ == '__main__':
-    DO_PROFILE=False
-    logging.basicConfig(level=logging.INFO)
-    if DO_PROFILE:
-        import cProfile as profile
-        import pstats
-        profile.run('test()', 'study.profile')
-        p = pstats.Stats('study.profile')
-        p.sort_stats('time').print_stats(50)
-    else:
-        if len(sys.argv) > 1:
-            test(sys.argv[1])
-        else:
-            test('../ThaiFoodStudy')
-
+    main()
 
