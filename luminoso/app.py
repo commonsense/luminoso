@@ -6,8 +6,8 @@ import csc.divisi2.algorithms.svd
 from csc import divisi2
 from csc import util
 from luminoso.whereami import get_icon
-from PyQt4 import QtCore, QtGui
-from PyQt4.QtCore import Qt
+from PySide import QtCore, QtGui
+from PySide.QtCore import Qt
 import traceback
 
 # Back up stdout before spyder redirects it to its console.
