@@ -153,9 +153,11 @@ class Study(QtCore.QObject):
         if key in self.settings: return self.settings[key]
         else: return DEFAULT_SETTINGS[key]
         
+    step = QtCore.pyqtSignal(['QString'])
+
     def _step(self, msg):
         logger.info(msg)
-        self.emit(QtCore.SIGNAL('step(QString)'), msg)
+        self.step.emit(msg)
 
     def get_contents_hash(self):
         def sha1(txt):
@@ -631,11 +633,7 @@ class StudyDirectory(QtCore.QObject):
 
     def save_settings(self):
         write_json_to_file(self.settings, self.get_settings_file())
-    
-    def _step(self, msg):
-        logger.info(msg)
-        self.emit(QtCore.SIGNAL('step(QString)'), msg)
-    
+
     def study_path(self, path):
         return self.dir + os.path.sep + path
 

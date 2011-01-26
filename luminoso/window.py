@@ -83,7 +83,7 @@ class MainWindow(QtGui.QMainWindow):
         self.ui.tree_view.clicked.connect(self.select_document)
         self.ui.axes_spinbox.valueChanged.connect(self.set_num_axes)
         self.ui.cutoff_spinbox.valueChanged.connect(self.set_concept_cutoff)
-        self.connect(self.ui.svdview_panel, QtCore.SIGNAL("svdSelectEvent()"), self.svdview_select)
+        self.ui.svdview_panel.svdSelectEvent.connect(self.svdview_select)
 
         self.setup_menus()
         # Disable elements that require a study loaded.
@@ -220,14 +220,14 @@ class MainWindow(QtGui.QMainWindow):
             with progress_reporter(self, 'Loading study %s' % dir, 7) as progress:
                 progress.set_text('Loading.')
                 self.study = self.study_dir.get_study()
-                self.connect(self.study, QtCore.SIGNAL('step(QString)'), progress.tick)
+                self.study.step.connect(progress.tick)
                 progress.set_text('Loading analysis.')
                 results = self.study_dir.get_existing_analysis()
                 progress.tick('Updating view.')
                 self.update_svdview(results)
                 progress.tick('Updating options.')
                 self.update_options()
-                self.disconnect(self.study, QtCore.SIGNAL('step(QString)'), progress.tick)
+                self.study.step.disconnect(progress.tick)
 
             self.results = results
             self.show_info()
@@ -303,14 +303,14 @@ class MainWindow(QtGui.QMainWindow):
         self.ui.show_info("<h3>Analyzing...</h3><p>(this may take a few minutes)</p>")
         
         with progress_reporter(self, 'Analyzing...', 8) as progress:
-            self.connect(self.study, QtCore.SIGNAL('step(QString)'), progress.tick)
+            self.study.step.connect(progress.tick)
             results = self.study_dir.analyze()
             logger.info('Analysis finished.')
             progress.tick('Updating view')
             self.update_svdview(results)
             self.results = results
             self.show_info()
-            self.disconnect(self.study, QtCore.SIGNAL('step(QString)'), progress.tick)
+            self.study.step.disconnect(progress.tick)
 
     def set_study_dir(self, dir):
         self.dir_model.setRootPath(dir)
