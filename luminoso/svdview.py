@@ -1,12 +1,16 @@
 import sys
 import re
 from PySide import QtCore
-from PySide.QtCore import Qt, QRectF as Rect, QPointF as Point, QLineF as Line, QSize, QMutex, QObject, QString, QTimer
+from PySide.QtCore import Qt, QRectF as Rect, QPointF, QLineF as Line, QSize, QMutex, QObject, QTimer
 from PySide.QtGui import QApplication, QColor, QWidget, QImage, QPainter, QPen, QFont, QFontMetrics, QVBoxLayout, QComboBox, QLabel, QPushButton, QGridLayout, QCompleter
 import numpy as np
 from collections import defaultdict
 from csc import divisi2
 from luminoso import svgfig
+
+# PySide's QPointF _requires_ floats.
+def Point(x, y):
+    return QPointF(float(x), float(y))
 
 # This initializes Qt, and nothing works without it. Even though we
 # don't use the "app" variable until the end.
@@ -310,7 +314,7 @@ class PointLayer(Layer):
 
         # draw the origin
         if self.luminoso.is_point_on_screen(np.zeros((2,))):
-            x, y = self.luminoso.projection_to_screen(np.zeros((2,)))
+            x, y = map(float, self.luminoso.projection_to_screen(np.zeros((2,))))
             painter.setBrush(QColor(100, 100, 100))
             painter.drawEllipse(Point(x, y), 6, 6)
             painter.setBrush(QColor(255, 255, 255))
@@ -323,7 +327,7 @@ class PointLayer(Layer):
                 b = g = r = 230
             size = self.sizes[order[i]] / pixelsize
             if size >= 1 and self.luminoso.is_on_screen(x, y):
-                painter.setBrush(QColor(r, g, b))
+                painter.setBrush(QColor(int(r), int(g), int(b)))
                 painter.drawEllipse(Point(x, y), size, size)
 
     def drawSVG(self):
@@ -410,9 +414,9 @@ class LabelLayer(Layer):
             self.label_mask[xmin:xmax, ymin:ymax] = True
 
             painter.setPen(QColor(0, 0, 0))
-            painter.drawText(Point(x+5, y+5), unicode(text))
-            painter.setPen(QColor(r, g, b))
-            painter.drawText(Point(x+4, y+4), unicode(text))
+            painter.drawText(Point(float(x+5), float(y+5)), unicode(text))
+            painter.setPen(QColor(int(r), int(g), int(b)))
+            painter.drawText(Point(float(x+4), float(y+4)), unicode(text))
 
             labeled_so_far += 1
             if labeled_so_far >= self.nlabels: break
@@ -467,7 +471,7 @@ class SelectionLayer(Layer):
                 # The selection was deleted in real-time data. Bail out.
                 return
 
-            x, y = self.luminoso.components_to_screen(vec)
+            x, y = map(float, self.luminoso.components_to_screen(vec))
             painter.drawEllipse(Point(x, y), 3, 3)
             painter.setPen(Qt.NoPen)
             painter.drawText(Point(x+4, y+4), unicode(text))
@@ -506,8 +510,8 @@ class NetworkLayer(Layer):
         if self.root:
             lines_to_draw = []
             for (source, target) in self.lines:
-                source_pt = Point(*self.luminoso.components_to_screen(self.luminoso.array[source]))
-                target_pt = Point(*self.luminoso.components_to_screen(self.luminoso.array[target]))
+                source_pt = Point(*map(float, self.luminoso.components_to_screen(self.luminoso.array[source])))
+                target_pt = Point(*map(float, self.luminoso.components_to_screen(self.luminoso.array[target])))
                 lines_to_draw.append(Line(source_pt, target_pt))
 
             painter.setPen(QColor(255, 255, 255, 100))
@@ -588,7 +592,7 @@ class CanonicalLayer(Layer):
         self.canonical = canonical
     def draw(self, painter):
         origin = np.zeros((2,))
-        origin_pt = Point(*self.luminoso.projection_to_screen(origin))
+        origin_pt = Point(*map(float, self.luminoso.projection_to_screen(origin)))
         #painter.setCompositionMode(QPainter.CompositionMode_Screen)
         #for axis in xrange(self.luminoso.k):
         #    projpoint = self.luminoso.projection.matrix[axis]/2
@@ -603,7 +607,7 @@ class CanonicalLayer(Layer):
         for canon in self.canonical:
             index = self.luminoso.labels.index(canon)
             components = self.luminoso.array[index]
-            target_pt = Point(*self.luminoso.components_to_screen(components))
+            target_pt = Point(*map(float, self.luminoso.components_to_screen(components)))
             # draw a yellowish line from the origin to the canonical doc
             painter.drawLine(Line(origin_pt, target_pt))
         #painter.setCompositionMode(QPainter.CompositionMode_SourceOver)
