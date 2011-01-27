@@ -189,9 +189,9 @@ class MainWindow(QtGui.QMainWindow):
             self.load_study(unicode(dirname))
 
     def csv_study(self):
-        csv_file = QtGui.QFileDialog.getOpenFileNames(None,"Select a CSV File to open.","/home")
-        filename = csv_file[0]
-        if filename and filename.endsWith(QtCore.QString('.csv')):
+        filename, filter_value = QtGui.QFileDialog.getOpenFileName(None,"Select a CSV File to open.","/home")
+        if filename and filename.endswith('.csv'):
+            # TODO: Fail visibly otherwise.
             csv = CSVFile(unicode(filename))
             self.ui.show_info("<h3>Creating Study...</h3><p>Study being located at "
                               +str(csv.study_path)+"</p><p>(this may take a few minutes)</p>")
