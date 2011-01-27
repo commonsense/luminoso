@@ -153,7 +153,7 @@ class Study(QtCore.QObject):
         if key in self.settings: return self.settings[key]
         else: return DEFAULT_SETTINGS[key]
         
-    step = QtCore.pyqtSignal(['QString'])
+    step = QtCore.Signal(['QString'])
 
     def _step(self, msg):
         logger.info(msg)

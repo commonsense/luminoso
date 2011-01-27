@@ -46,8 +46,8 @@ class Projection(QObject):
     space is called the "projection plane", representing projection
     coordinates.
     """
-    rotated = QtCore.pyqtSignal()
-    reset = QtCore.pyqtSignal()
+    rotated = QtCore.Signal()
+    reset = QtCore.Signal()
     
     def __init__(self, k):
         QObject.__init__(self)
@@ -676,7 +676,7 @@ class LinkLayer(Layer):
         return svgfig.Fig(*lines)
         
 class SVDViewer(QWidget):
-    svdSelectEvent = QtCore.pyqtSignal()
+    svdSelectEvent = QtCore.Signal()
 
     def __init__(self, array, labels, **options):
         QWidget.__init__(self)
@@ -1046,7 +1046,7 @@ def main(app):
     app.exec_()
 
 class SVDViewPanel(QWidget):
-    svdSelectEvent = QtCore.pyqtSignal()
+    svdSelectEvent = QtCore.Signal()
 
     axis_re = re.compile(r"^Axis (\d+)$")
     def __init__(self):
@@ -1120,11 +1120,11 @@ class SVDViewPanel(QWidget):
         else:
             self.y_chooser.setCurrentIndex(0)
 
-    @QtCore.pyqtSlot(str)
+    @QtCore.Slot(str)
     def set_x_from_string(self, string):
         self.set_axis_from_string(0, string)
 
-    @QtCore.pyqtSlot(str)
+    @QtCore.Slot(str)
     def set_y_from_string(self, string):
         self.set_axis_from_string(1, string)
 

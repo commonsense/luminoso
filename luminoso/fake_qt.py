@@ -1,5 +1,5 @@
 class QObject(object):
     pass
 
-class pyqtSignal(object):
+class Signal(object):
     def emit(*a, **kw): pass

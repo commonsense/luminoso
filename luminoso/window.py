@@ -116,7 +116,7 @@ class MainWindow(QtGui.QMainWindow):
             info = self.results.get_concept_info(label)
             if info is not None: self.ui.show_info(info)
 
-    @QtCore.pyqtSlot()
+    @QtCore.Slot()
     def toolbar_search(self):
         self.search(self.ui.search_box.text())
 
@@ -205,6 +205,7 @@ class MainWindow(QtGui.QMainWindow):
     def doc_luminoso(self):
         webo('http://csc.media.mit.edu/docs/luminoso/index.html')
 
+    @QtCore.Slot()
     def load_study_dialog(self):
         dir = QtGui.QFileDialog.getExistingDirectory()
         if dir:
