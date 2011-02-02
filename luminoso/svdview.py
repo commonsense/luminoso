@@ -236,6 +236,7 @@ class PixelRenderingLayer(Layer):
         self.pixels and have the results appear in the image.
         """
         self.pixels = np.zeros((height, width, 4), dtype='uint8')
+        self.img = QImage(self.pixels, width, height, QImage.Format_RGB32)
 
     def draw(self, painter):
         pixels = self.pixels
@@ -263,8 +264,6 @@ class PixelRenderingLayer(Layer):
         pixels[:, :3, :3] = 100
         pixels[:, -3:, :3] = 100
 
-        height, width, depth = self.pixels.shape
-        self.img = QImage(self.pixels.tostring(), width, height, QImage.Format_RGB32)
         painter.drawImage(0, 0, self.img)
 
 def quadrange(maximum, steps):
