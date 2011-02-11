@@ -39,8 +39,41 @@ mapreduce_term = function(term, weight, collection) {
                    out: {reduce: collection}});
 };
 
-eigenvector_iteration = function(input_collection, output_collection) {
+eigenvector_iteration = function(input_collection, output_collection, eigs) {
+    // run MapReduce on every element in the current vector
     input_collection.find().forEach(function (entry) {
         mapreduce_term(entry['_id'], entry['total'], output_collection)
+    }
+
+    // Subtract out all previous eigenvectors
+    var totals = [];
+    for (var e=0; e<eigs.length; e++) {
+        totals.push(0);
+        var eig = eigs[e];
+        output_collection.find().forEach(function(entry) {
+            var prod = entry['total'] * (eig[entry['_id']] || 0);
+            totals[e] += prod;
+        }
+    }
+
+    // Divide by the Euclidean norm
+    var mag_sq = 0.0;
+    output_collection.find().forEach(function(entry) {
+        var val = entry['total'];
+        for (var e=0; e<eigs.length; e++) {
+            val -= (eigs[e][entry['_id']] || 0) * totals[e];
+        }
+        mag_sq += val*val;
+    }
+
+    // Re-calculate the updated values and store them in the output collection
+    output_collection.find().forEach(function(entry) {
+        var val = entry['total'];
+        for (var e=0; e<eigs.length; e++) {
+            val -= (eigs[e][entry['_id']] || 0) * totals[e];
+        }
+        val /= Math.sqrt(mag_sq);
+        output_collection.update({'_id': entry['_id']},
+                                 {'$set': {total: val}});
     }
 }
