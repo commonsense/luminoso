@@ -1,7 +1,7 @@
 import sys
 import re
 from PyQt4 import QtCore
-from PyQt4.QtCore import Qt, QRectF as Rect, QPointF as Point, QLineF as Line, QSize, QMutex, QObject, QString, QTimer, SIGNAL
+from PyQt4.QtCore import Qt, QRectF as Rect, QPointF as Point, QLineF as Line, QSize, QMutex, QObject, QString, QTimer
 from PyQt4.QtGui import QApplication, QColor, QWidget, QImage, QPainter, QPen, QFont, QFontMetrics, QVBoxLayout, QComboBox, QLabel, QPushButton, QGridLayout, QCompleter
 import numpy as np
 from collections import defaultdict
@@ -47,6 +47,7 @@ class Projection(QObject):
     coordinates.
     """
     rotated = QtCore.pyqtSignal()
+    reset = QtCore.pyqtSignal()
     
     def __init__(self, k):
         QObject.__init__(self)
@@ -60,7 +61,7 @@ class Projection(QObject):
         self.target_matrix[:] = 0
         for idx in (0, 1):
             self.target_matrix[idx, idx] = 1
-        self.emit(SIGNAL('reset()'))
+        self.reset.emit()
 
     def components_to_projection(self, vec):
         try:
@@ -675,6 +676,8 @@ class LinkLayer(Layer):
         return svgfig.Fig(*lines)
         
 class SVDViewer(QWidget):
+    svdSelectEvent = QtCore.pyqtSignal()
+
     def __init__(self, array, labels, **options):
         QWidget.__init__(self)
         assert isinstance(array, np.ndarray),\
@@ -711,7 +714,7 @@ class SVDViewer(QWidget):
         self.timer = QTimer(self)
         self.timer_ticks = 0
         self.timer.setInterval(30)
-        self.connect(self.timer, SIGNAL('timeout()'), self.timerEvent)
+        self.timer.timeout.connect(self.timerEvent)
         self.timer.start()
 
         self.setMouseTracking(True)
@@ -919,7 +922,7 @@ class SVDViewer(QWidget):
     def selectEvent(self, index):
         for layer in self.layers:
             layer.selectEvent(index)
-        self.emit(SIGNAL('svdSelectEvent()'))
+        self.svdSelectEvent.emit()
 
     def focus_on_point(self, text):
         index = self.labels.index(text)
@@ -1045,6 +1048,8 @@ def main(app):
     app.exec_()
 
 class SVDViewPanel(QWidget):
+    svdSelectEvent = QtCore.pyqtSignal()
+
     axis_re = re.compile(r"^Axis (\d+)$")
     def __init__(self):
         QWidget.__init__(self)
@@ -1069,11 +1074,11 @@ class SVDViewPanel(QWidget):
         self.layout.setColumnStretch(4, 1)
         self.layout.setRowStretch(0, 1)
 
-        self.connect(self.nav_reset, SIGNAL("clicked()"), self.reset_view)
-        self.connect(self.x_chooser, SIGNAL("currentIndexChanged(QString)"), self.set_x_from_string)
-        self.connect(self.y_chooser, SIGNAL("currentIndexChanged(QString)"), self.set_y_from_string)
+        self.nav_reset.clicked.connect(self.reset_view)
+        self.x_chooser.currentIndexChanged['QString'].connect(self.set_x_from_string)
+        self.y_chooser.currentIndexChanged['QString'].connect(self.set_y_from_string)
     
-        self.connect(self.x_chooser, SIGNAL("activate(QString)"), self.set_x_from_string)
+        self.x_chooser.activated['QString'].connect(self.set_x_from_string)
     
     def activate(self, docs, projections, magnitudes, canonical):
         self.deactivate()
@@ -1081,11 +1086,8 @@ class SVDViewPanel(QWidget):
         self.layout.addWidget(self.viewer, 0, 0, 1, 7)
         self.setup_choosers(canonical)
         self.viewer.projection.rotated.connect(self.update_choosers)
-        self.connect(self.viewer, SIGNAL('svdSelectEvent()'), self.viewer_selected)
+        self.viewer.svdSelectEvent.connect(self.svdSelectEvent)
     
-    def viewer_selected(self):
-        self.emit(SIGNAL('svdSelectEvent()'))
-                
 
     #These should probably be placed somewhere else but oh well
     def get_selected_label(self):
@@ -1120,9 +1122,11 @@ class SVDViewPanel(QWidget):
         else:
             self.y_chooser.setCurrentIndex(0)
 
+    @QtCore.pyqtSlot(str)
     def set_x_from_string(self, string):
         self.set_axis_from_string(0, string)
 
+    @QtCore.pyqtSlot(str)
     def set_y_from_string(self, string):
         self.set_axis_from_string(1, string)
 
@@ -1167,7 +1171,7 @@ class SVDViewPanel(QWidget):
     def deactivate(self):
         if self.viewer is not None:
             self.viewer.projection.rotated.disconnect(self.update_choosers)
-            self.disconnect(self.viewer, SIGNAL('svdSelectEvent()'), self.viewer_selected)
+            self.viewer.svdSelectEvent.disconnect(self.svdSelectEvent)
             self.viewer.hide()
             del self.viewer
             self.viewer = None

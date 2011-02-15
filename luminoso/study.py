@@ -153,9 +153,11 @@ class Study(QtCore.QObject):
         if key in self.settings: return self.settings[key]
         else: return DEFAULT_SETTINGS[key]
         
+    step = QtCore.pyqtSignal(['QString'])
+
     def _step(self, msg):
         logger.info(msg)
-        self.emit(QtCore.SIGNAL('step(QString)'), msg)
+        self.step.emit(msg)
 
     def get_contents_hash(self):
         def sha1(txt):
@@ -326,6 +328,7 @@ class Study(QtCore.QObject):
         if self.is_associative():
             doc_rows = divisi2.aligned_matrix_multiply(document_matrix, reduced_U)
             projections = reduced_U.extend(doc_rows)
+
         else:
             doc_indices = [V.row_index(doc.name)
                            for doc in self.documents
@@ -444,10 +447,10 @@ class Study(QtCore.QObject):
         docs, projections, Sigma = self.get_eigenstuff()
         magnitudes = np.sqrt(np.sum(np.asarray(projections*projections), axis=1))
         if self.is_associative():
-            spectral = divisi2.reconstruct_activation(projections+0.00001, Sigma, post_normalize=True)
+            spectral = divisi2.reconstruct_activation(projections, Sigma, post_normalize=True, offset=0.0001)
         else:
-            spectral = divisi2.reconstruct_similarity(projections+0.00001, Sigma,
-            post_normalize=True)
+            spectral = divisi2.reconstruct_similarity(projections, Sigma,
+            post_normalize=True, offset=0.0001)
         self._step('Calculating stats...')
         stats = self.compute_stats(docs, spectral)
         
@@ -631,11 +634,7 @@ class StudyDirectory(QtCore.QObject):
 
     def save_settings(self):
         write_json_to_file(self.settings, self.get_settings_file())
-    
-    def _step(self, msg):
-        logger.info(msg)
-        self.emit(QtCore.SIGNAL('step(QString)'), msg)
-    
+
     def study_path(self, path):
         return self.dir + os.path.sep + path
 
