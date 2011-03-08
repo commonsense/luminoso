@@ -140,6 +140,12 @@ class Study(QtCore.QObject):
     A Study is a collection of documents and other matrices that can be analyzed.
     '''
     def __init__(self, name, documents, canonical, other_matrices, settings):
+        """
+        documents: list of Document objects
+        canonical: list of Document objects that are the canonical documents (possibly empty)
+        other_matrices: things to blend.
+        settings: a dict of settings. See DEFAULT_SETTINGS above.
+        """
         QtCore.QObject.__init__(self)
         self.name = name
         self.study_documents = documents
