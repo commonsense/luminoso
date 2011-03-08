@@ -373,10 +373,6 @@ class Study(QtCore.QObject):
             valid_concepts = [c for c in spectral.row_labels if not c.endswith('.txt')]
             concept_indices = [spectral.row_index(c) for c in valid_concepts]
             
-            # Compute the association of all study documents with each other
-            assoc_grid = np.asarray(spectral[doc_indices, doc_indices].to_dense())
-            assert not np.any(np.isnan(assoc_grid))
-            
             # Make an ad hoc category of documents, then find how much each
             # document is associated with this average document.
             category_vec = divisi2.DenseVector(spectral.shape[0], spectral.row_labels)
