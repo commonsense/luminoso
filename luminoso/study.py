@@ -57,11 +57,15 @@ class Document(object):
 
     @classmethod
     def from_file(cls, filename, name):
-        # Open in text mode.
-        rawtext = open(filename, 'r')
-        encoding = chardet.detect(rawtext.read())['encoding']
-        rawtext.close()
-        text = codecs.open(filename, encoding=encoding, errors='replace').read()
+        rawtext = open(filename, 'rb').read()
+        encoding = chardet.detect(rawtext)['encoding']
+        try:
+            text = rawtext.decode(encoding, 'replace')
+        except LookupError:
+            # This can happen in the case of encodings that Python doesn't implement, like EUC-TW.
+            # FIXME: There should be a better way of indicating this problem
+            name = 'CHARACTER ENCODING PROBLEM [%s]' % name
+            text = ''
         return cls(name, text)
 
     def extract_concepts_with_negation(self):
