@@ -1,0 +1,28 @@
+frankl.txt
+let s
+wait staff
+staff
+restaurant
+thai food
+even
+great
+awful
+wrong
+cafe
+ve
+shannond.txt
+thomasc.txt
+sichuan
+make
+spicy
+tell
+canonical_chinese.txt
+up
+2star
+christiang.txt
+suspect
+again
+annoy
+server
+schezuan
+extremely

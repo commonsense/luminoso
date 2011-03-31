@@ -1,0 +1,12 @@
+wait
+student
+read
+fail
+class
+understand
+note
+category
+type
+look
+id.txt
+think

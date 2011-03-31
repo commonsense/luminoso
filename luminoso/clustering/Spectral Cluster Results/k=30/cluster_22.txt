@@ -1,0 +1,4 @@
+sos.txt
+area
+crowd
+square
