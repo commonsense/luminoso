@@ -1,0 +1,14 @@
+street
+price
+money
+person
+johannaw.txt
+3star
+crowd
+share
+shannond.txt
+pay
+sos.txt
+boston
+love
+hello
