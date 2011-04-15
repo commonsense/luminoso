@@ -56,6 +56,11 @@ class Projection(QObject):
         self.target_matrix = np.zeros((k, 2))
         self.reset_projection()
         self.mouse_rotation = False
+   
+    def setState(self,matrices):
+        self.matrix = matrices[0].copy()
+        self.target_matrix = matrices[1].copy()
+
 
     def reset_projection(self):
         self.target_matrix[:] = 0
@@ -775,6 +780,17 @@ class SVDViewer(QWidget):
         self.set_default_axes()
         self.update_screenpts()
         self.update()
+
+    def setState(self,state):
+        self.screen_center = state["screen_center"]
+        self.screen_size = state["screen_size"]
+        self.projection.setState(state["Projection"])
+        self.update_screenpts()
+        self.update()
+    def getState(self):
+        return {"screen_center": self.screen_center.copy(), 
+                "screen_size": self.screen_size.copy(), "Projection":(self.projection.matrix.copy(),self.projection.target_matrix.copy())}
+        
 
     @staticmethod
     def make_svdview(matrix, svdmatrix, magnitudes=None, canonical=None):
