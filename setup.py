@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-VERSION = "2.0a1"
+VERSION = "2.0b2"
 
 from setuptools import setup, find_packages
 import os.path, sys
@@ -38,8 +38,8 @@ setup(
     version = VERSION,
     maintainer='MIT Media Lab, Software Agents group',
     maintainer_email='conceptnet@media.mit.edu',     
-    url='http://launchpad.net/luminoso/',
     license = "http://www.gnu.org/copyleft/gpl.html",
+    url = 'http://github.com/commonsense/luminoso',
     platforms = ["any"],
     description = "A Python GUI for semantic analysis using Divisi",
     classifiers = classifiers,
@@ -63,7 +63,7 @@ setup(
         },
     },
 
-    #entry_points={'gui_scripts': ['luminoso = luminoso.run_luminoso:main'],
-    #              'console_scripts': ['luminoso-study = luminoso.study:main']},
+    entry_points={#'gui_scripts': ['luminoso = luminoso.run_luminoso:main'],
+                  'console_scripts': ['luminoso-study = luminoso.study:main']},
 )
 

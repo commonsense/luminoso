@@ -719,7 +719,7 @@ def save_config_file(config, filename):
     config.save(out)
     out.close()
 
-def main(argv):
+def main():
     """
     When run as a script, this module will take in a path to a Luminoso1-style
     study directory, and will save or update the Luminoso2 model in it.
@@ -733,33 +733,33 @@ def main(argv):
 
     If the Model/ directory exists already, it will update the existing model.
     """
-    dir = argv[1].rstrip('/')
-    lang = argv[2]
-    if lang == 'jp': # easy to confuse ja with JP
-        lang = 'ja'
-    model_dir = dir+'/Model'
-    docs_dir = dir+'/Documents'
-    canonical_url = dir+'/Canonical'
-
-    # test for a new canonical.json
-    if os.access(dir+'/canonical.json', os.R_OK):
-        canonical_url = dir+'/canonical.json'
-
-    try:
-        model = LuminosoModel.make_common_sense(model_dir, lang)
-    except IOError:
-        model = LuminosoModel(model_dir)
-    
-    model.add_from_url(dir+'/Canonical', 'Canonical')
-    model.learn_from_url(dir+'/Documents', 'all')
-    LOG.info("Saving stats to Model/%s.stats.json" % study)
-    model.save_canonical_stats()
-    return model
-
-if __name__ == '__main__':
     import sys
     if len(sys.argv) <= 2:
         print "Usage: model.py <study dir> <language>"
     else:
-        main(sys.argv)
+        dir = sys.argv[1].rstrip('/')
+        lang = sys.argv[2]
+        if lang == 'jp': # easy to confuse ja with JP
+            lang = 'ja'
+        model_dir = dir+'/Model'
+        docs_dir = dir+'/Documents'
+        canonical_url = dir+'/Canonical'
+
+        # test for a new canonical.json
+        if os.access(dir+'/canonical.json', os.R_OK):
+            canonical_url = dir+'/canonical.json'
+
+        try:
+            model = LuminosoModel.make_common_sense(model_dir, lang)
+        except IOError:
+            model = LuminosoModel(model_dir)
+        
+        model.add_from_url(dir+'/Canonical', 'Canonical')
+        model.learn_from_url(dir+'/Documents', 'all')
+        LOG.info("Saving stats")
+        model.save_canonical_stats()
+        return model
+
+if __name__ == '__main__':
+    main()
 
