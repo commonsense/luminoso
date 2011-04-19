@@ -3,10 +3,23 @@
 <head>
 <title>vector space visualization</title>
 <script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.5.2/jquery.min.js"></script>
+<script type="text/javascript">
+// requestAnimationFrame shim (http://paulirish.com/2011/requestanimationframe-for-smart-animating/)
+window.requestAnimFrame = (function(){
+      return  window.requestAnimationFrame       || 
+              window.webkitRequestAnimationFrame || 
+              window.mozRequestAnimationFrame    || 
+              window.oRequestAnimationFrame      || 
+              window.msRequestAnimationFrame     || 
+              function(/* function */ callback, /* DOMElement */ element){
+                window.setTimeout(callback, 1000 / 60);
+              };
+    })();
+</script>
 <script type="text/javascript" src="code.js"></script>
 </head>
 
 <body>
-<canvas id="canvas" width="900px" height="900px"></canvas>
+<canvas id="canvas" width="500px" height="500px"></canvas>
 </body>
 </html>
