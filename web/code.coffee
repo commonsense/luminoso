@@ -1,6 +1,16 @@
+ctx = null
+imgData = null
 $ ->
+  # Canvas init
+  canvas = document.getElementById("canvas")
+  w=canvas.width; h=canvas.height
+  ctx = canvas.getContext "2d"
+  ctx.clearRect(0, 0, w, h);
+  imgData = ctx.getImageData(0, 0, w, h)
+
   $('#canvas').mousemove onMouse
   setTimeout tick, 100
+  null
 
 points = ([[900*Math.random(), 900*Math.random(), 900*Math.random()], Math.floor(255*Math.random())] for i in [0...10000])
 cmap = ([i, 0, 255-i] for i in [0...256])
@@ -24,24 +34,16 @@ onMouse = (e) ->
   #console.log dot(x_vec, y_vec)
   setTimeout tick, 0
 
-
 project = (vec) ->
   x = dot(vec, x_vec); y = dot(vec, y_vec)
   [x+200, y+200]
 
 window.tick = ->
-  start = new Date
-  canvas = document.getElementById("canvas")
-  w=canvas.width; h=canvas.height
-  ctx = canvas.getContext "2d"
-  ctx.clearRect(0, 0, w, h);
-  imgData = ctx.getImageData(0, 0, w, h)
-  arr = imgData.data
-  init_took = new Date - start
-  console.log("Canvas init took", init_took) if init_took > 10
+  w = imgData.width; h = imgData.height; arr = imgData.data
+  for offset in [0...w*h*4]
+    arr[offset] = 255
 
   start = new Date
-  ###
   for pt in points
     [vec, cidx] = pt
     #[x, y] = project vec
@@ -57,17 +59,14 @@ window.tick = ->
     arr[offset-4*w] = light_color[0]; arr[offset-4*w+1] = light_color[1]; arr[offset-4*w+2] = light_color[2]; arr[offset-4*w+3] = 64;
     arr[offset+4*w] = light_color[0]; arr[offset+4*w+1] = light_color[1]; arr[offset+4*w+2] = light_color[2]; arr[offset+4*w+3] = 64;
   ctx.putImageData(imgData, 0, 0)
-  ###
   drawing_took = new Date - start
   console.log("Drawing took", drawing_took) if (drawing_took > 33)
 
   start = new Date
-  ###
   for i in [0...points.length/10]
     [vec, cidx] = points[i]
     [x, y] = project vec
     ctx.fillText("pt", Math.floor(x), Math.floor(y))
-  ###
   labeling_took = new Date - start
   console.log("Labeling took", labeling_took) if (labeling_took > 15)
   null
