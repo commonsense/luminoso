@@ -297,6 +297,12 @@ class LuminosoModel(object):
             if study is not None:
                 self.database.set_tag_on_document(docid, 'study', study)
         
+        LOG.info("Committing documents to the database")
+        self.database.commit()
+
+        LOG.info("Collecting relevant terms")
+        self.database.update_relevance()
+
         if learn_iterations:
             # Second pass (optional): find how much we should update the
             # ReconstructedMatrix entries based on the word associations
