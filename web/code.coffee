@@ -20,6 +20,27 @@ $ ->
   requestAnimFrame(tick, canvas)
   null
 
+window.loadBinary = (url, callback) ->
+  xhr = new XMLHttpRequest()
+  xhr.open('GET', url, true)
+  if (xhr.hasOwnProperty("responseType"))
+    xhr.responseType = "arraybuffer"
+  else
+    xhr.overrideMimeType 'text/plain; charset=x-user-defined'
+  xhr.onreadystatechange = =>
+    if xhr.readyState == 4
+      console.log xhr.status
+      console.log xhr
+      if xhr.hasOwnProperty('responseType') && xhr.responseType == 'arraybuffer'
+        data = xhr.response
+      else if xhr.mozResponseArrayBuffer?
+        data = xhr.mozResponseArrayBuffer
+      else
+        alert 'Getting binary data unsupported in this browser.'
+      callback data
+  xhr.send null
+
+
 points = ([[Math.random(), Math.random(), Math.random()], Math.floor(255*Math.random())] for i in [0...10000])
 cmap = ([i, 0, 255-i] for i in [0...256])
 MIX = .5
