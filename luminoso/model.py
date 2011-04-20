@@ -30,6 +30,9 @@ except ImportError:
     import simplejson as json
 LOG = logging.getLogger(__name__)
 
+class StudyExists(Exception):
+    pass
+
 class LuminosoModel(object):
     """
     A LuminosoModel is a meta-study. You supply it with as many documents
@@ -590,7 +593,7 @@ class LuminosoModel(object):
         """
         # Adjust the size of the matrix to match the config, if necessary.
         if os.access(model_dir, os.F_OK):
-            raise IOError("The model directory %r already exists." % model_dir)
+            raise StudyExists("The model directory %r already exists." % model_dir)
         rows = config['num_concepts']
         cols = config['num_axes']
         if orig_dmat.shape != (rows, cols):
@@ -659,6 +662,7 @@ class LuminosoModel(object):
             config['reader'] = 'simplenlp.'+lang
         if os.access(model_dir, os.F_OK):
             raise IOError("The model directory %r already exists." % model_dir)
+        LOG.info("Making common sense matrix")
         assoc = divisi2.network.conceptnet_assoc(lang)
         (mat_U, diag_S, _) = assoc.normalize_all().svd(k=100)
         rmat = divisi2.reconstruct_activation(
@@ -751,7 +755,7 @@ def main():
 
         try:
             model = LuminosoModel.make_common_sense(model_dir, lang)
-        except IOError:
+        except StudyExists:
             model = LuminosoModel(model_dir)
         
         model.add_from_url(dir+'/Canonical', 'Canonical')
