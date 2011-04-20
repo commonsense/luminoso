@@ -744,11 +744,14 @@ def main():
     If the Model/ directory exists already, it will update the existing model.
     """
     import sys
-    if len(sys.argv) <= 2:
+    if len(sys.argv) <= 1:
         print "Usage: model.py <study dir> <language>"
     else:
         dir = sys.argv[1].rstrip('/')
-        lang = sys.argv[2]
+        if len(sys.argv) <= 2:
+            lang = 'en'
+        else:
+            lang = sys.argv[2]
         if lang == 'jp': # easy to confuse ja with JP
             lang = 'ja'
         model_dir = dir+'/Model'
@@ -764,8 +767,8 @@ def main():
         except StudyExists:
             model = LuminosoModel(model_dir)
         
-        model.add_from_url(dir+'/Canonical', 'Canonical')
-        model.learn_from_url(dir+'/Documents', 'all')
+        model.add_from_url(canonical_url, 'Canonical')
+        model.learn_from_url(docs_dir, 'all')
         LOG.info("Saving stats")
         model.save_canonical_stats()
         return model
