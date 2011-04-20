@@ -1,6 +1,10 @@
 ctx = null
 imgData = null
 canvas = null
+lastInteraction = null
+timeout = 3000
+window.running = false
+
 $ ->
   # Canvas init
   canvas = document.getElementById("canvas")
@@ -9,7 +13,9 @@ $ ->
   ctx.clearRect(0, 0, w, h);
   imgData = ctx.getImageData(0, 0, w, h)
 
+  window.running = true
   $('#canvas').mousemove onMouse
+  lastInteraction = new Date
   #setInterval tick, 50
   requestAnimFrame(tick, canvas)
   null
@@ -32,6 +38,7 @@ origin_y = 200
 zoom = 100
 
 onMouse = (e) ->
+  lastInteraction = new Date
   #console.log e.clientX
   cosine = Math.cos((e.clientX - 450)/300)
   x_vec = [1, cosine, 1-cosine]
@@ -39,6 +46,10 @@ onMouse = (e) ->
   #console.log dot(x_vec, y_vec)
   zoom = 3*e.clientY
   #setTimeout tick, 0
+  if (!running)
+    console.log('resuming')
+    requestAnimFrame(tick, canvas)
+  null
 
 project = (vec) ->
   x = dot(vec, x_vec); y = dot(vec, y_vec)
@@ -75,5 +86,10 @@ window.tick = ->
   labeling_took = new Date - start
   console.log("Labeling took", labeling_took) if (labeling_took > 15)
 
-  requestAnimFrame(tick, canvas)
+  if new Date - lastInteraction > timeout
+    console.log('stopping')
+    window.running = false
+  else
+    window.running = true
+    requestAnimFrame(tick, canvas)
   null
