@@ -1,5 +1,5 @@
 # coding:utf-8
-from luminoso.text_readers import get_reader, DOCUMENT
+from luminoso2.text_readers import get_reader, DOCUMENT
 from nose.tools import assert_equal, raises
 
 def test_simple():

@@ -4,7 +4,7 @@ number of times various terms appear, and the number of times they appear
 in each document.
 """
 import math
-from luminoso.text_readers import TAG
+from luminoso2.text_readers import TAG
 
 # all the messy SQLAlchemy imports
 from sqlalchemy.ext.declarative import declarative_base

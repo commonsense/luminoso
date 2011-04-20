@@ -16,9 +16,9 @@ import numpy as np
 from divisi2.fileIO import load_pickle, save_pickle
 from divisi2.reconstructed import ReconstructedMatrix
 from divisi2.ordered_set import PrioritySet
-from luminoso.term_database import TermDatabase, _BIG
-from luminoso.text_readers import get_reader, DOCUMENT, TAG
-from luminoso.document_handlers import handle_url
+from luminoso2.term_database import TermDatabase, _BIG
+from luminoso2.text_readers import get_reader, DOCUMENT, TAG
+from luminoso2.document_handlers import handle_url
 from collections import defaultdict
 import os
 from config import Config

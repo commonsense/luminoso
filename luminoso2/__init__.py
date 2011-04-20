@@ -1,7 +1,7 @@
 """
 This is the top-level module of Luminoso version 2.
 """
-from luminoso.model import LuminosoModel
+from luminoso2.model import LuminosoModel
 import warnings
 import logging, sys
 logging.basicConfig(stream=sys.stdout, level=logging.INFO)

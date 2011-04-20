@@ -1,4 +1,4 @@
-from luminoso.whereami import get_project_filename
+from luminoso2.whereami import get_project_filename
 import os
 
 def test_filenames():

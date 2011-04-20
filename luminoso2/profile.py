@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-from luminoso import LuminosoModel
+from luminoso2 import LuminosoModel
 model = LuminosoModel.make_common_sense('/tmp/luminoso_profile', 'en')
 
 def run():
