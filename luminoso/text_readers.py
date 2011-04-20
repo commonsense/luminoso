@@ -283,12 +283,20 @@ class SimpleNLPJapaneseReader(SimpleNLPReader):
         Simply tokenize the text, without dealing with stopwords.
         """
         return self.nl.tokenize_list(text)
+    
+    def extract_term_texts(self, text):
+        """
+        Get a list of (term, phrase) mappings from the text.
+        """
+        return self.nl.extract_phrases(text)
 
     def extract_tokens(self, text):
         """
         Return a list of the (lemmatized, non-stopword) tokens that appear in
         the text.
         """
+        analysis = self.nl.analyze(text)
+
         tokens = self.tokenize(text)
         tokens_out = []
         for token in tokens:
