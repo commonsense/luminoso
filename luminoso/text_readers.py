@@ -296,28 +296,14 @@ class SimpleNLPJapaneseReader(SimpleNLPReader):
         the text.
         """
         analysis = self.nl.analyze(text)
-
-        tokens = self.tokenize(text)
-        tokens_out = []
-        for token in tokens:
-            norm = self.nl.normalize(token)
-            if is_tag(token) or not self.is_normal_word(token):
-                tokens_out.append(token)
-            elif (self.nl.is_stopword(token) or
-                  self.nl.is_stopword(norm)):
-                pass
-            else:
-                tokens_out.extend([
-                    tok for tok in self.tokenize(norm)
-                    if tok != u'〜'
-                ])
-        return tokens_out
+        return [self.nl.get_record_root(record) for record in analysis
+                if not self.nl.is_stopword_record(record)]
 
     def untokenize(self, tokens):
         """
         Given a list of tokens, re-assemble them into a phrase.
         """
-        return ''.join(tokens)
+        return ''.join(tokens)    
 
 def parse_tag(token):
     """

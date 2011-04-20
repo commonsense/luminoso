@@ -48,7 +48,7 @@ setup(
     #app=['luminoso/run_luminoso.py'],
     scripts=['luminoso/model.py'],
     #windows=[{'script': 'luminoso/run_luminoso.py'}],
-    install_requires=['csc-utils >= 0.5', 'divisi2 >= 2.2.2', 'ipython >= 0.9.1', 'jinja2', 'chardet', 'sqlalchemy', 'config', 'simplenlp'],
+    install_requires=['csc-utils >= 0.6', 'divisi2 >= 2.2.2', 'jinja2', 'chardet', 'sqlalchemy', 'config', 'simplenlp >= 1.0.0'],
     package_data={'simplenlp': ['mblem/*.pickle', 'en/*.txt']},
     include_package_data=True,
     #data_files=DATA_FILES,
