@@ -282,7 +282,7 @@ class SimpleNLPJapaneseReader(SimpleNLPReader):
         """
         Simply tokenize the text, without dealing with stopwords.
         """
-        return [str(tok).decode('utf-8') for tok in self.nl.tokenize_list(text)]
+        return self.nl.tokenize_list(text)
 
     def extract_tokens(self, text):
         """

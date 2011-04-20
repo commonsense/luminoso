@@ -190,17 +190,28 @@ class TermDatabase(object):
         `value`. Also, if `newdoc` is True, increment the number of distinct
         documents containing the term.
         """
-        term_entry = self.sql_session.query(Term).get(term)
-        if term_entry:
-            term_entry.count += value
-            if newdoc:
-                term_entry.distinct_docs += 1
-            self.term_count_cache[term] = term_entry.count
+        distinct_inc = int(newdoc)
+        if term in self.term_count_cache:
+            self.sql_engine.execute(
+              "update terms set count=count+1, "
+              "distinct_docs=distinct_docs+:distinct_inc "
+              "where term=:term",
+              term=term, distinct_inc=distinct_inc
+            )
+            self.term_count_cache[term] += 1
         else:
-            assert newdoc, "Something is wrong -- how did this term "\
-                           "appear without appearing in a document?"
-            term_entry = Term(term, value, 1, 0)
-            self.sql_session.add(term_entry)
+            term_entry = self.sql_session.query(Term).get(term)
+            if term_entry:
+                term_entry.count += value
+                if newdoc:
+                    term_entry.distinct_docs += 1
+                self.term_count_cache[term] = term_entry.count
+            else:
+                assert newdoc, "Something is wrong -- how did this term "\
+                               "appear without appearing in a document?"
+                term_entry = Term(term, value, 1, 0)
+                self.sql_session.add(term_entry)
+                self.term_count_cache[term] = 1
         
     def _increment_term_document_count(self, document, term, value=1):
         """
@@ -406,12 +417,10 @@ class TermDatabase(object):
         Calculate the new relevance value of a term and store it in the
         database (but don't commit yet).
         """
-        #self.sql_engine.execute(
-        #  "update terms set relevance=:relevance where term=:term",
-        #  term=term, relevance=self.term_relevance(term)
-        #)
-        term_entry = self.sql_session.query(Term).get(term)
-        term_entry.relevance = self.term_relevance(term)
+        self.sql_engine.execute(
+          "update terms set relevance=:relevance where term=:term",
+          term=term, relevance=self.term_relevance(term)
+        )
 
     def count_term_in_document(self, term, document):
         """

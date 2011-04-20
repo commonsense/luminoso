@@ -22,7 +22,7 @@ def ensure_unicode(text):
     if isinstance(text, unicode):
         return text
     elif isinstance(text, str):
-        return text.decode('utf-8', errors='replace')
+        return text.decode('utf-8', 'replace')
     else:
         return unicode(text)
 
