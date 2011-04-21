@@ -44,7 +44,6 @@ setup(
     classifiers = classifiers,
     ext_modules = [],
     packages=find_packages()+['icons'],
-    scripts=['luminoso2/model.py'],
     install_requires=['csc-utils >= 0.6', 'divisi2 >= 2.2.2', 'jinja2', 'chardet', 'sqlalchemy', 'config', 'simplenlp >= 1.0.0'],
     package_data={'simplenlp': ['mblem/*.pickle', 'en/*.txt']},
     include_package_data=True,
@@ -61,6 +60,6 @@ setup(
     },
 
     entry_points={#'gui_scripts': ['luminoso = luminoso.run_luminoso:main'],
-                  'console_scripts': ['luminoso-study = luminoso2.study:main']},
+                  'console_scripts': ['luminoso2-study = luminoso2.model:main']},
 )
 
