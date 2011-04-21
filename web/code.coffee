@@ -24,8 +24,8 @@ class window.Viewer
     @points = data.points
     @names = data.names
     @colors = (Math.floor(255*Math.random()) for i in [0...@points.length])
-    @projection = new Projection(data.ndim)
     w = @canvas.width; h = @canvas.height
+    @projection = new Projection(data.ndim, w, h)
     @ctx = @canvas.getContext "2d"
     @ctx.clearRect(0, 0, w, h);
     @imgData = @ctx.getImageData(0, 0, w, h)
@@ -121,8 +121,8 @@ class window.Viewer
 
 
 class Projection
-  constructor: (k) ->
-    @k = k
+  constructor: (k, width, height) ->
+    @k = k; @width = width; @height = height
     @x_vec = new Float32Array(@k)
     @y_vec = new Float32Array(@k)
     @x_tgt = new Float32Array(@k)
@@ -135,8 +135,8 @@ class Projection
       @y_vec[i] = @y_tgt[i] = 0
     @x_tgt[0] = 1.0
     @y_tgt[1] = 1.0
-    @origin_x = 0
-    @origin_y = 200
+    @origin_x = @width/2
+    @origin_y = @height/2
     @zoom = 100
 
   tick: ->
