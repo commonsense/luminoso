@@ -2,7 +2,7 @@
 $ ->
   # Canvas init
   window.viewer = new Viewer(document.getElementById("canvas"))
-  window.viewer.setData('pldb.coords')
+  window.viewer.setData('pldb')
   null
 
 cmap = ([i, 0, 255-i] for i in [0...256])
@@ -21,8 +21,10 @@ class window.Viewer
     @points = null
     @colors = null
 
-  init: (points, colors) ->
-    @points = points; @colors = colors
+  init: (data) ->
+    @points = data.points
+    @names = data.names
+    @colors = (Math.floor(255*Math.random()) for i in [0...@points.length])
     @projection.reset()
     w = @canvas.width; h = @canvas.height
     @ctx = @canvas.getContext "2d"
@@ -47,10 +49,20 @@ class window.Viewer
     xhr.send null
 
   setData: (url) ->
-    @_getBinaryAjax url, (coords) =>
-      points = coords.data
-      colors = (Math.floor(255*Math.random()) for i in [0...points.length])
-      @init points, colors
+    data = {}
+    maybeInit = =>
+      @init data if (data.points? and data.names?)
+    
+    @_getBinaryAjax url+'.coords', (coords) =>
+      data.points = coords.data
+      maybeInit()
+
+    $.ajax
+      url: url+'.names'
+      dataType: 'text'
+      success: (names) =>
+        data.names = names.split('\n')
+        maybeInit()
 
   onMouse: (e) ->
     @lastInteraction = new Date
@@ -91,13 +103,14 @@ class window.Viewer
     console.log("Drawing took", drawing_took) if (drawing_took > 33)
 
     start = new Date
+    names = @names
     for i in [0...points.length/10]
       vec = points[i]
       cidx = colors[i]
       [x, y] = project vec
-      @ctx.fillText("pt", Math.floor(x), Math.floor(y))
+      @ctx.fillText(names[i], Math.floor(x), Math.floor(y))
     labeling_took = new Date - start
-    console.log("Labeling took", labeling_took) if (labeling_took > 15)
+    console.log("Labeling ", points.length/10, "points took", labeling_took) if (labeling_took > 15)
 
     if new Date - @lastInteraction > @timeout
       console.log('stopping')
