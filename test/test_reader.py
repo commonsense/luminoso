@@ -1,5 +1,5 @@
 # coding:utf-8
-from luminoso.text_readers import get_reader, DOCUMENT
+from luminoso2.text_readers import get_reader, DOCUMENT
 from nose.tools import assert_equal, raises
 
 def test_simple():
@@ -30,4 +30,3 @@ def test_japanese():
     assert u'日本語' in neg_doc_terms
     assert u'日本語 出来る' in neg_doc_terms
     assert u'困る' in pos_doc_terms
-    assert u'私' in pos_doc_terms

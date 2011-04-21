@@ -1,11 +1,11 @@
 # coding:utf-8
-import luminoso
-from luminoso.model import LuminosoModel
+import luminoso2
+from luminoso2.model import LuminosoModel
 import tempfile, shutil
 from nose.tools import assert_equal
 import logging
 logging.basicConfig()
-from luminoso.whereami import get_project_filename
+from luminoso2.whereami import get_project_filename
 TEMPDIR = None
 
 def setup_module():
@@ -16,7 +16,7 @@ def teardown_module():
     shutil.rmtree(TEMPDIR)
 
 def test_japanese():
-    japanese = luminoso.make_japanese(TEMPDIR+'/japanese')
+    japanese = luminoso2.make_japanese(TEMPDIR+'/japanese')
     assoc1 = japanese.assoc.entry_named(u'猫', u'犬')
     assoc2 = japanese.assoc.entry_named(u'猫', u'好き')
     assert assoc1 > 0.3
@@ -76,7 +76,7 @@ def test_read_from_url():
     assert terms == [('happy', 1.0), ('sad', -0.5)]
 
 def test_english():
-    english = luminoso.make_english(TEMPDIR+'/english')
+    english = luminoso2.make_english(TEMPDIR+'/english')
     assert english.assoc.entry_named('cat', 'dog') > 0.5
     err1 = english.learn_assoc(1, 'foo', 'bar')
     assoc1 = english.assoc.entry_named('foo', 'bar')

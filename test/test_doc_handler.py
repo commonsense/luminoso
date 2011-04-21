@@ -1,5 +1,5 @@
-from luminoso.document_handlers import *
-from luminoso.whereami import get_project_filename
+from luminoso2.document_handlers import *
+from luminoso2.whereami import get_project_filename
 import nose
 
 def test_basics():

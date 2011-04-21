@@ -16,11 +16,12 @@ import numpy as np
 from divisi2.fileIO import load_pickle, save_pickle
 from divisi2.reconstructed import ReconstructedMatrix
 from divisi2.ordered_set import PrioritySet
-from luminoso.term_database import TermDatabase, _BIG
-from luminoso.text_readers import get_reader, DOCUMENT, TAG
-from luminoso.document_handlers import handle_url
+from luminoso2.term_database import TermDatabase, _BIG
+from luminoso2.text_readers import get_reader, DOCUMENT, TAG
+from luminoso2.document_handlers import handle_url
 from collections import defaultdict
 import os
+import sys
 from config import Config
 import logging
 import codecs
@@ -30,10 +31,13 @@ except ImportError:
     import simplejson as json
 LOG = logging.getLogger(__name__)
 
+class StudyExists(Exception):
+    pass
+
 class LuminosoModel(object):
     """
-    A LuminosoModel is a meta-study. You supply it with as many documents
-    as possible from the space of documents you intend to analyze, or
+    A LuminosoModel is a semantic space. You supply it with as many documents
+    as possible from the domain of documents you intend to analyze, or
     possibly other forms of domain-specific knowledge.
 
     The LuminosoModel represents the semantic similarities between things
@@ -51,6 +55,9 @@ class LuminosoModel(object):
         This directory will contain saved versions of various matrices, as
         well as a SQLite database of terms and documents.
         """
+        if not isinstance(model_dir, unicode):
+            # Ensure that paths are unicode.
+            model_dir = model_dir.decode(sys.getfilesystemencoding())
         if not os.access(model_dir, os.R_OK):
             raise IOError("Cannot read the study directory %s. "
                           "Use LuminosoModel.make() to make a new one."
@@ -139,6 +146,7 @@ class LuminosoModel(object):
 
         The document should be expressed as a dictionary, containing at least
         these keys:
+        
         - name: the unique identifier for the document
         - text: the plain text of the document, possibly including text-encoded
           tags
@@ -146,6 +154,7 @@ class LuminosoModel(object):
           actually locates it relative to the study
 
         Optionally, it may contain:
+        
         - tags: (key, value) tuples representing tags
         """
         LOG.info("Reading document: %r" % doc['url'])
@@ -294,6 +303,12 @@ class LuminosoModel(object):
             if study is not None:
                 self.database.set_tag_on_document(docid, 'study', study)
         
+        LOG.info("Committing documents to the database")
+        self.database.commit()
+
+        LOG.info("Collecting relevant terms")
+        self.database.update_relevance()
+
         if learn_iterations:
             # Second pass (optional): find how much we should update the
             # ReconstructedMatrix entries based on the word associations
@@ -590,7 +605,7 @@ class LuminosoModel(object):
         """
         # Adjust the size of the matrix to match the config, if necessary.
         if os.access(model_dir, os.F_OK):
-            raise IOError("The model directory %r already exists." % model_dir)
+            raise StudyExists("The model directory %r already exists." % model_dir)
         rows = config['num_concepts']
         cols = config['num_axes']
         if orig_dmat.shape != (rows, cols):
@@ -659,6 +674,7 @@ class LuminosoModel(object):
             config['reader'] = 'simplenlp.'+lang
         if os.access(model_dir, os.F_OK):
             raise IOError("The model directory %r already exists." % model_dir)
+        LOG.info("Making common sense matrix")
         assoc = divisi2.network.conceptnet_assoc(lang)
         (mat_U, diag_S, _) = assoc.normalize_all().svd(k=100)
         rmat = divisi2.reconstruct_activation(
@@ -719,7 +735,7 @@ def save_config_file(config, filename):
     config.save(out)
     out.close()
 
-def main(argv):
+def run_in_directory(dir, lang='en'):
     """
     When run as a script, this module will take in a path to a Luminoso1-style
     study directory, and will save or update the Luminoso2 model in it.
@@ -733,10 +749,6 @@ def main(argv):
 
     If the Model/ directory exists already, it will update the existing model.
     """
-    dir = argv[1].rstrip('/')
-    lang = argv[2]
-    if lang == 'jp': # easy to confuse ja with JP
-        lang = 'ja'
     model_dir = dir+'/Model'
     docs_dir = dir+'/Documents'
     canonical_url = dir+'/Canonical'
@@ -747,19 +759,28 @@ def main(argv):
 
     try:
         model = LuminosoModel.make_common_sense(model_dir, lang)
-    except IOError:
+    except StudyExists:
         model = LuminosoModel(model_dir)
     
-    model.add_from_url(dir+'/Canonical', 'Canonical')
-    model.learn_from_url(dir+'/Documents', 'all')
-    LOG.info("Saving stats to Model/%s.stats.json" % study)
+    model.add_from_url(canonical_url, 'Canonical')
+    model.learn_from_url(docs_dir, 'all')
+    LOG.info("Saving stats")
     model.save_canonical_stats()
     return model
 
-if __name__ == '__main__':
-    import sys
-    if len(sys.argv) <= 2:
+def main():
+    if len(sys.argv) <= 1:
         print "Usage: model.py <study dir> <language>"
     else:
-        main(sys.argv)
+        dir = sys.argv[1].rstrip('/')
+        if len(sys.argv) <= 2:
+            lang = 'en'
+        else:
+            lang = sys.argv[2]
+        if lang == 'jp': # easy to confuse ja with JP
+            lang = 'ja'
+        run_in_directory(dir, lang)
+
+if __name__ == '__main__':
+    main()
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-VERSION = "2.0a1"
+VERSION = "2.0b3"
 
 from setuptools import setup, find_packages
 import os.path, sys
@@ -11,7 +11,6 @@ if 'py2exe' in sys.argv:
 import modulefinder
 for p in sys.path:
    modulefinder.AddPackagePath(__name__, p)
-sys.path.append('luminoso/lib')
 
 classifiers=[
     'Intended Audience :: Developers',
@@ -34,21 +33,18 @@ INCLUDES = ['divisi2', 'simplenlp', 'jinja2', 'sqlalchemy', 'numpy', 'chardet',
 DATA_FILES = ['icons']
 
 setup(
-    name="Luminoso",
+    name="Luminoso2",
     version = VERSION,
     maintainer='MIT Media Lab, Software Agents group',
     maintainer_email='conceptnet@media.mit.edu',     
-    url='http://launchpad.net/luminoso/',
     license = "http://www.gnu.org/copyleft/gpl.html",
+    url = 'http://github.com/commonsense/luminoso',
     platforms = ["any"],
     description = "A Python GUI for semantic analysis using Divisi",
     classifiers = classifiers,
     ext_modules = [],
     packages=find_packages()+['icons'],
-    #app=['luminoso/run_luminoso.py'],
-    scripts=['luminoso/model.py'],
-    #windows=[{'script': 'luminoso/run_luminoso.py'}],
-    install_requires=['csc-utils >= 0.5', 'divisi2 >= 2.2.2', 'ipython >= 0.9.1', 'jinja2', 'chardet', 'sqlalchemy', 'config', 'simplenlp'],
+    install_requires=['csc-utils >= 0.6', 'divisi2 >= 2.2.2', 'jinja2', 'chardet', 'sqlalchemy', 'config', 'simplenlp >= 1.0.0'],
     package_data={'simplenlp': ['mblem/*.pickle', 'en/*.txt']},
     include_package_data=True,
     #data_files=DATA_FILES,
@@ -63,7 +59,7 @@ setup(
         },
     },
 
-    #entry_points={'gui_scripts': ['luminoso = luminoso.run_luminoso:main'],
-    #              'console_scripts': ['luminoso-study = luminoso.study:main']},
+    entry_points={#'gui_scripts': ['luminoso = luminoso.run_luminoso:main'],
+                  'console_scripts': ['luminoso2-study = luminoso2.model:main']},
 )
 

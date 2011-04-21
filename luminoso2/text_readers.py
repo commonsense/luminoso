@@ -255,11 +255,13 @@ class SimpleNLPJapaneseReader(SimpleNLPReader):
     # Words that flip the context from positive to negative, to their *left*.
     NEGATIONS = [u'ない']
 
-    # A bit unclear why most of these aren't handled in simplenlp.ja.
-    EXTRA_STOPWORDS = [u'ない', u'これ', u'それ', u'あれ', u'この', u'その',
-                       u'あの', u'ある', u'いる', u'する', u'が', u'と', u'も',
-                       u'で', u'か', u'ん', u'よう', u'ば', u'もの', u'くる',
-                       u'なに', u'何', u'なん', u'た']
+    # After simplenlp deals with stopwords and luminoso has detected negations,
+    # we include "nai" as a stopword as well.
+    EXTRA_STOPWORDS = [u'ない']
+    
+    # include both English and Japanese punctuation
+    PUNCT = [u'.', u'?', u'!', u':', u'…', u'—', u'、', u'。',
+             u'「', u'」', u'『', u'』', u'【', u'】', u'〖', u'〗']
     
     # Count は as a punctuation token. It's actually the topic marker, but
     # the scope of a negation will rarely cross it.
@@ -280,34 +282,28 @@ class SimpleNLPJapaneseReader(SimpleNLPReader):
         """
         Simply tokenize the text, without dealing with stopwords.
         """
-        return [str(tok).decode('utf-8') for tok in self.nl.tokenize_list(text)]
+        return self.nl.tokenize_list(text)
+    
+    def extract_term_texts(self, text):
+        """
+        Get a list of (term, phrase) mappings from the text.
+        """
+        return self.nl.extract_phrases(text)
 
     def extract_tokens(self, text):
         """
         Return a list of the (lemmatized, non-stopword) tokens that appear in
         the text.
         """
-        tokens = self.tokenize(text)
-        tokens_out = []
-        for token in tokens:
-            norm = self.nl.normalize(token)
-            if is_tag(token) or not self.is_normal_word(token):
-                tokens_out.append(token)
-            elif (self.nl.is_stopword(token) or
-                  self.nl.is_stopword(norm)):
-                pass
-            else:
-                tokens_out.extend([
-                    tok for tok in self.tokenize(norm)
-                    if tok != u'〜'
-                ])
-        return tokens_out
+        analysis = self.nl.analyze(text)
+        return [self.nl.get_record_root(record) for record in analysis
+                if not self.nl.is_stopword_record(record)]
 
     def untokenize(self, tokens):
         """
         Given a list of tokens, re-assemble them into a phrase.
         """
-        return ''.join(tokens)
+        return ''.join(tokens)    
 
 def parse_tag(token):
     """
@@ -348,6 +344,11 @@ def parse_tag(token):
 READERS = {
     'simplenlp.en': SimpleNLPEnglishReader,
     'simplenlp.ja': SimpleNLPJapaneseReader,
+}
+
+LANGUAGE_DEFAULTS = {
+    'en': 'simplenlp.en',
+    'ja': 'mecab'
 }
 
 def get_reader(name):

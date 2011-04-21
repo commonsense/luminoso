@@ -5,22 +5,12 @@ have various features for keeping track of things like to-do lists. Orgmode is
 available as a plugin for Emacs, Sublime Text 2 (which I use), and possibly
 for vim.
 
-* Short-term TODOs [10/15]
-  - [X] change learning process to group term updates together
-  - [X] test PLDB associations
-  - [X] compare inputs to documents
-  - [ ] compare inputs to tags
-  - [X] compare documents to documents
-  - [ ] compare documents to tags
-  - [X] test ConnectMe-style PLDB tags
-  - [ ] true/false tags as SVM classifiers (no SGD for now)
-  - [X] create canonical documents
-  - [X] centrality stats
-  - [X] correlation stats
-  - [X] test Japanese documents
-  - [ ] Demo: new ConnectMe
-  - [X] Demo: recommend groups or projects from free text
-  - [ ] package up relevant stuff on PyPI
+* Short-term TODOs [4/5]
+  - [X] Figure out why documents are waiting on the disk so much
+  - [X] Distribute common-sense matrices with Divisi2
+  - [X] Make the language argument optional
+  - [X] rename package to luminoso2
+  - [ ] Plan and document the install process for Japanese
 
 * Design plans [0/9]
   - [ ] New "LuminosoModel" that can be incrementally trained [3/6]
@@ -31,13 +21,13 @@ for vim.
     - [ ] Make URLs relative to the model root (not current dir)
     - [ ] Document
 
-  - [ ] LuminosoStudies on top of LuminosoModels [0/7]
-    - [ ] Discover from filesystem
-    - [ ] Look into the proper way to do correlation
-    - [ ] Centrality
+  - [ ] LuminosoStudies on top of LuminosoModels [4/7]
+    - [X] Discover from filesystem
+    - [X] Correlation (now with error bars)
+    - [X] Centrality
     - [ ] Interesting concepts (make more interesting)
     - [ ] Tag prediction (classification, as in SVM)
-    - [ ] Converter from previous study
+    - [X] Converter from previous study
     - [ ] Document these
   
   - [ ] Configurability [0/3]
@@ -64,10 +54,11 @@ for vim.
   
   - [ ] Transitional PyQt interface
 
-  - [ ] HTML/JS interface (job for a UROP?) [0/4]
+  - [ ] HTML/JS interface (job for a UROP?) [0/5]
     - [ ] Some interface for choosing data sources (could be messy!)
     - [ ] Interface for configuration, including choosing a reader
-    - [ ] Some way to hook in visualizations (processing.js?)
+    - [ ] Ken's visualizer
+    - [ ] Report writer
     - [ ] Document
       - [ ] Tutorial
       - [ ] Workflow
@@ -81,6 +72,23 @@ for vim.
   - [ ] Visualization [0/2]
     - [ ] New "fisheye" visualizer (Birago?)
     - [ ] different views like MDS
+
+* Previous short-term TODOs [14/15]
+  - [X] change learning process to group term updates together
+  - [X] test PLDB associations
+  - [X] compare inputs to documents
+  - [X] compare inputs to tags
+  - [X] compare documents to documents
+  - [X] compare documents to tags
+  - [X] test ConnectMe-style PLDB tags
+  - [ ] true/false tags as SVM classifiers (no SGD for now)
+  - [X] create canonical documents
+  - [X] centrality stats
+  - [X] correlation stats
+  - [X] test Japanese documents
+  - [X] Demo: new ConnectMe
+  - [X] Demo: recommend groups or projects from free text
+  - [X] package up relevant stuff on PyPI
 
 * redesign notes from before
   - Toggle different matrices in the blend

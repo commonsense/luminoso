@@ -1,5 +1,5 @@
-import luminoso
-from luminoso.model import LuminosoModel
+import luminoso2
+from luminoso2.model import LuminosoModel
 import tempfile, shutil
 from nose.tools import assert_equal
 

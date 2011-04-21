@@ -1,7 +1,7 @@
 """
 This is the top-level module of Luminoso version 2.
 """
-from luminoso.model import LuminosoModel
+from luminoso2.model import LuminosoModel, run_in_directory
 import warnings
 import logging, sys
 logging.basicConfig(stream=sys.stdout, level=logging.INFO)
@@ -17,3 +17,4 @@ def load(model_dir):
     Load a LuminosoModel.
     """
     return LuminosoModel(model_dir)
+
