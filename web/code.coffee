@@ -66,10 +66,7 @@ class window.Viewer
 
   onMouse: (e) ->
     @lastInteraction = new Date
-    cosine = Math.cos((e.clientX - 450)/300)
-    @projection.x_vec = [1, cosine, 1-cosine]
-    @projection.y_vec = [0, 1-cosine, -cosine]
-    @projection.zoom = 3*e.clientY
+    @projection.moveTowards @points[0], e.clientX, e.clientY
     if (!@running)
       console.log('resuming')
       @refresh()
@@ -147,6 +144,49 @@ class Projection
       @x_vec[i] = @x_vec[i] * .5 + @x_tgt[i] * .5
       @y_vec[i] = @y_vec[i] * .5 + @y_tgt[i] * .5
 
+  # Move a k-space vector towards a screen-point target
+  moveTowards: (vec, targetX, targetY) ->
+    # Convert to projection coordinates
+    targetX = (targetX - @origin_x)/@zoom
+    targetY = (targetY - @origin_y)/@zoom
+
+    # Find out where the point originally should have projected to.
+    origX = dot(@x_tgt, vec); origY = dot(@y_tgt, vec)
+
+    # delta = (target - orig) / dot(vec, vec)
+    vecMag = dot(vec, vec)
+    deltaX = (targetX - origX) / vecMag
+    deltaY = (targetY - origY) / vecMag
+
+    # target_matrix += delta[np.newaxis,:] * vec[:,np.newaxis]
+    for i in [0...@k]
+      @x_tgt[i] += deltaX * vec[i]
+      @y_tgt[i] += deltaY * vec[i]
+
+    magnitude = deltaX*deltaX + deltaY*deltaY
+    power = Math.atan(magnitude)/10
+    @orthogonalize power
+
+  # Use normalization and Gram-Schmidt orthogonalization to ensure that
+  # this projection represents a valid rotation of the component space,
+  # not a dilation or skew.
+  #
+  # Actually, now it only does that when power=1. When power is less, the
+  # space will not enforce strict rotations, it will only make the space
+  # wobble back toward orthogonality.
+  orthogonalize: (power) ->
+    targetX = @x_tgt; targetY = @y_tgt
+    prevX = copyVec(targetX); prevY = copyVec(targetY)
+    normalizeInPlace(targetX)
+    commonMag = dot(targetX, targetY) # NOTE: in the Python code the magnitude was y_vec, not y_tgt
+    for i in [0...@k]
+      targetY[i] -= targetX[i] * commonMag
+    normalizeInPlace(targetY)
+    # target = target*(power) + prev*(1-power)
+    for i in [0...@k]
+      targetX[i] = targetX[i]*power + prevX[i]*(1-power)
+      targetY[i] = targetY[i]*power + prevY[i]*(1-power)
+
   makeProjector: ->
     x_vec = @x_vec; y_vec = @y_vec
     origin_x = @origin_x; origin_y = @origin_y
@@ -197,3 +237,15 @@ dot = (vec1, vec2) ->
   for i in [0...vec1.length] by 1
     s += vec1[i] * vec2[i]
   s
+
+normalizeInPlace = (vec) ->
+  mag = Math.sqrt dot(vec, vec)
+  for i in [0...vec.length]
+    vec[i] /= mag
+  null
+
+copyVec = (vec) ->
+  v2 = new Float32Array(vec.length)
+  for i in [0...vec.length]
+    v2[i] = vec[i]
+  v2
