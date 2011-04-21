@@ -729,7 +729,7 @@ def save_config_file(config, filename):
     config.save(out)
     out.close()
 
-def main():
+def run_in_directory(dir, lang='en'):
     """
     When run as a script, this module will take in a path to a Luminoso1-style
     study directory, and will save or update the Luminoso2 model in it.
@@ -744,6 +744,26 @@ def main():
     If the Model/ directory exists already, it will update the existing model.
     """
     import sys
+    model_dir = dir+'/Model'
+    docs_dir = dir+'/Documents'
+    canonical_url = dir+'/Canonical'
+
+    # test for a new canonical.json
+    if os.access(dir+'/canonical.json', os.R_OK):
+        canonical_url = dir+'/canonical.json'
+
+    try:
+        model = LuminosoModel.make_common_sense(model_dir, lang)
+    except StudyExists:
+        model = LuminosoModel(model_dir)
+    
+    model.add_from_url(dir+'/Canonical', 'Canonical')
+    model.learn_from_url(dir+'/Documents', 'all')
+    LOG.info("Saving stats")
+    model.save_canonical_stats()
+    return model
+
+def main():
     if len(sys.argv) <= 2:
         print "Usage: model.py <study dir> <language>"
     else:
@@ -751,24 +771,7 @@ def main():
         lang = sys.argv[2]
         if lang == 'jp': # easy to confuse ja with JP
             lang = 'ja'
-        model_dir = dir+'/Model'
-        docs_dir = dir+'/Documents'
-        canonical_url = dir+'/Canonical'
-
-        # test for a new canonical.json
-        if os.access(dir+'/canonical.json', os.R_OK):
-            canonical_url = dir+'/canonical.json'
-
-        try:
-            model = LuminosoModel.make_common_sense(model_dir, lang)
-        except StudyExists:
-            model = LuminosoModel(model_dir)
-        
-        model.add_from_url(dir+'/Canonical', 'Canonical')
-        model.learn_from_url(dir+'/Documents', 'all')
-        LOG.info("Saving stats")
-        model.save_canonical_stats()
-        return model
+    run_in_directory(dir, lang)
 
 if __name__ == '__main__':
     main()
