@@ -11,7 +11,6 @@ light_cmap = ([255*MIX + (1-MIX)*i, 0, 255*MIX + (1-MIX)*(255-i)] for i in [0...
 
 class window.Viewer
   constructor: (canvas) ->
-    @projection = new Projection()
     @running = false
     @ctx = null
     @imgData = null
@@ -25,7 +24,7 @@ class window.Viewer
     @points = data.points
     @names = data.names
     @colors = (Math.floor(255*Math.random()) for i in [0...@points.length])
-    @projection.reset()
+    @projection = new Projection(data.ndim)
     w = @canvas.width; h = @canvas.height
     @ctx = @canvas.getContext "2d"
     @ctx.clearRect(0, 0, w, h);
@@ -54,6 +53,7 @@ class window.Viewer
       @init data if (data.points? and data.names?)
     
     @_getBinaryAjax url+'.coords', (coords) =>
+      data.ndim = coords.ndim
       data.points = coords.data
       maybeInit()
 
@@ -76,6 +76,8 @@ class window.Viewer
     null
 
   tick: ->
+    @projection.tick()
+
     # Cache really common references
     project = @projection.makeProjector()
     arr = @arr; points = @points; colors = @colors
@@ -122,15 +124,28 @@ class window.Viewer
 
 
 class Projection
-  constructor: ->
-    @reset
+  constructor: (k) ->
+    @k = k
+    @x_vec = new Float32Array(@k)
+    @y_vec = new Float32Array(@k)
+    @x_tgt = new Float32Array(@k)
+    @y_tgt = new Float32Array(@k)
+    @reset()
 
   reset: ->
-    @x_vec = [1, 0, 0]
-    @y_vec = [0, 1, 0]
+    for i in [0...@k]
+      @x_vec[i] = @x_tgt[i] = 0
+      @y_vec[i] = @y_tgt[i] = 0
+    @x_tgt[0] = 1.0
+    @y_tgt[1] = 1.0
     @origin_x = 0
     @origin_y = 200
     @zoom = 100
+
+  tick: ->
+    for i in [0...@k]
+      @x_vec[i] = @x_vec[i] * .5 + @x_tgt[i] * .5
+      @y_vec[i] = @y_vec[i] * .5 + @y_tgt[i] * .5
 
   makeProjector: ->
     x_vec = @x_vec; y_vec = @y_vec
