@@ -64,6 +64,8 @@ class window.Viewer
     null
 
   tick: ->
+    # Cache really common references
+    project = @projection.makeProjector()
     arr = @arr; points = @points; colors = @colors
     w = @imgData.width; h = @imgData.height; arr = @imgData.data
     for offset in [0...w*h*4]
@@ -73,7 +75,7 @@ class window.Viewer
     for i in [0...points.length]
       vec = points[i]
       cidx = colors[i]
-      [x, y] = @projection.project vec
+      [x, y] = project vec
       unless (0 < x < w and 0 < y < h)
         continue
       color = cmap[cidx]
@@ -92,7 +94,7 @@ class window.Viewer
     for i in [0...points.length/10]
       vec = points[i]
       cidx = colors[i]
-      [x, y] = @projection.project vec
+      [x, y] = project vec
       @ctx.fillText("pt", Math.floor(x), Math.floor(y))
     labeling_took = new Date - start
     console.log("Labeling took", labeling_took) if (labeling_took > 15)
@@ -117,9 +119,16 @@ class Projection
     @origin_y = 200
     @zoom = 100
 
+  makeProjector: ->
+    x_vec = @x_vec; y_vec = @y_vec
+    origin_x = @origin_x; origin_y = @origin_y
+    zoom = @zoom
+    return (vec) ->
+      x = dot(x_vec, vec); y = dot(y_vec, vec)
+      [x*zoom+origin_x, y*zoom+origin_y]
+
   project: (vec) ->
-    x = dot(@x_vec, vec); y = dot(@y_vec, vec)
-    [x*@zoom+@origin_x, y*@zoom+@origin_y]
+    (@makeProjector()) vec
 
 
 window.loadBinary = (url, callback) ->
