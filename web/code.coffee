@@ -199,26 +199,6 @@ class Projection
     (@makeProjector()) vec
 
 
-window.loadBinary = (url, callback) ->
-  xhr = new XMLHttpRequest()
-  xhr.open('GET', url, true)
-  if (xhr.hasOwnProperty("responseType"))
-    xhr.responseType = "arraybuffer"
-  else
-    xhr.overrideMimeType 'text/plain; charset=x-user-defined'
-  xhr.onreadystatechange = =>
-    if xhr.readyState == 4
-      console.log xhr.status
-      console.log xhr
-      if xhr.hasOwnProperty('responseType') && xhr.responseType == 'arraybuffer'
-        data = xhr.response
-      else if xhr.mozResponseArrayBuffer?
-        data = xhr.mozResponseArrayBuffer
-      else
-        alert 'Getting binary data unsupported in this browser.'
-      callback data
-  xhr.send null
-
 parseCoords = (data) ->
   ndim = readUInt32(data, 0)
   nitems = readUInt32(data, 4)
