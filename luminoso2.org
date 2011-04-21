@@ -5,11 +5,11 @@ have various features for keeping track of things like to-do lists. Orgmode is
 available as a plugin for Emacs, Sublime Text 2 (which I use), and possibly
 for vim.
 
-* Short-term TODOs [1/5]
+* Short-term TODOs [4/5]
   - [X] Figure out why documents are waiting on the disk so much
-  - [ ] Distribute common-sense matrices with Divisi2
-  - [ ] Make the language argument optional
-  - [ ] rename package to luminoso2
+  - [X] Distribute common-sense matrices with Divisi2
+  - [X] Make the language argument optional
+  - [X] rename package to luminoso2
   - [ ] Plan and document the install process for Japanese
 
 * Design plans [0/9]
