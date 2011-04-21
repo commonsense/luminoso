@@ -33,7 +33,11 @@ class window.Viewer
     # Set up animation loop and timers
     @lastInteraction = new Date
     @refresh()
-    $(@canvas).mousemove $.proxy(@onMouse, this)
+    @mouseButton = 0
+    $(@canvas)
+      .mousemove($.proxy(@onMouseMove, this))
+      .mousedown($.proxy(@onMouseDown, this))
+      .mouseup($.proxy(@onMouseUp, this))
     null
 
   refresh: ->
@@ -65,13 +69,30 @@ class window.Viewer
         data.names = names.split('\n')
         maybeInit()
 
-  onMouse: (e) ->
+  _interacted: ->
     @lastInteraction = new Date
-    @projection.moveTowards @points[0], e.clientX, e.clientY
     if (!@running)
       console.log('resuming')
       @refresh()
     null
+
+  onMouseMove: (e) ->
+    if @mouseButton == 1
+      @projection.moveTowards @points[0], e.clientX, e.clientY
+    else if @mouseButton == 3
+      @projection.shiftOrigin e.clientX - @lastMouseX, e.clientY - @lastMouseY
+      @lastMouseX = e.clientX; @lastMouseY = e.clientY
+    @_interacted()
+    null
+
+  onMouseDown: (e) ->
+    @mouseButton = e.which
+    @lastMouseX = e.clientX; @lastMouseY = e.clientY
+    @_interacted()
+    false
+
+  onMouseUp: (e) ->
+    @mouseButton = 0
 
   tick: ->
     @projection.tick()
@@ -144,6 +165,10 @@ class Projection
     for i in [0...@k]
       @x_vec[i] = @x_vec[i] * .5 + @x_tgt[i] * .5
       @y_vec[i] = @y_vec[i] * .5 + @y_tgt[i] * .5
+
+  shiftOrigin: (deltaX, deltaY) ->
+    @origin_x += deltaX
+    @origin_y += deltaY
 
   # Move a k-space vector towards a screen-point target
   moveTowards: (vec, targetX, targetY) ->
