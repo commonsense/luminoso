@@ -25,14 +25,15 @@ class window.Viewer
     @names = data.names
     @colors = (Math.floor(255*Math.random()) for i in [0...@points.length])
     w = @canvas.width; h = @canvas.height
+
     @projection = new Projection(data.ndim, w, h)
     @ctx = @canvas.getContext "2d"
-    @ctx.clearRect(0, 0, w, h);
     @imgData = @ctx.getImageData(0, 0, w, h)
-    @running = true
-    $(@canvas).mousemove $.proxy(@onMouse, this)
+
+    # Set up animation loop and timers
     @lastInteraction = new Date
     @refresh()
+    $(@canvas).mousemove $.proxy(@onMouse, this)
     null
 
   refresh: ->
