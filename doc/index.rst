@@ -12,8 +12,9 @@ Contents:
    :maxdepth: 2
     
    install
-   luminoso1
+   model
    canonical
+   luminoso1
 
 Indices
 =======

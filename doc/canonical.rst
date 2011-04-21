@@ -19,9 +19,12 @@ positive expressions from negative ones, which we call `positive-emotion.txt`::
     good like love enjoy happy nice easy,
     NOT bad dislike hate sad angry hard difficult
 
+Another use of canonical documents is to create one for each topic you are
+interested in, so that you can use those topics to organize the space.
+
 Luminoso will calculate statistics called "centrality" and "correlation" that
 compare sets of documents (called "studies") to each canonical document. 
 
-Statistics
-----------
+Correlation and centrality
+--------------------------
 TODO

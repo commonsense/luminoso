@@ -35,8 +35,8 @@ class StudyExists(Exception):
 
 class LuminosoModel(object):
     """
-    A LuminosoModel is a meta-study. You supply it with as many documents
-    as possible from the space of documents you intend to analyze, or
+    A LuminosoModel is a semantic space. You supply it with as many documents
+    as possible from the domain of documents you intend to analyze, or
     possibly other forms of domain-specific knowledge.
 
     The LuminosoModel represents the semantic similarities between things
@@ -142,6 +142,7 @@ class LuminosoModel(object):
 
         The document should be expressed as a dictionary, containing at least
         these keys:
+        
         - name: the unique identifier for the document
         - text: the plain text of the document, possibly including text-encoded
           tags
@@ -149,6 +150,7 @@ class LuminosoModel(object):
           actually locates it relative to the study
 
         Optionally, it may contain:
+        
         - tags: (key, value) tuples representing tags
         """
         LOG.info("Reading document: %r" % doc['url'])
