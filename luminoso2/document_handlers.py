@@ -8,6 +8,7 @@ The job of `handle_url` is to dispatch to the appropriate function.
 """
 import chardet
 import os
+import sys
 try:
     import json
 except ImportError:
