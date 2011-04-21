@@ -12,7 +12,9 @@ $ ->
   ctx = canvas.getContext "2d"
   ctx.clearRect(0, 0, w, h);
   imgData = ctx.getImageData(0, 0, w, h)
+  null
 
+initViewer = ->
   window.running = true
   $('#canvas').mousemove onMouse
   lastInteraction = new Date
@@ -40,8 +42,38 @@ window.loadBinary = (url, callback) ->
       callback data
   xhr.send null
 
+parseCoords = (data) ->
+  ndim = readUInt32(data, 0)
+  nitems = readUInt32(data, 4)
+  offset = 8
+  arr = []
+  for item in [0...nitems] by 1
+    entry = new Float32Array(ndim)
+    arr.push(entry)
+    for dim in [0...ndim] by 1
+      entry[dim] = readFloat32(data, offset)
+      offset += 4
+  return {ndim: ndim, nitems: nitems, data: arr}
 
-points = ([[Math.random(), Math.random(), Math.random()], Math.floor(255*Math.random())] for i in [0...10000])
+window.loadCoords = (url, callback) ->
+  xhr = new XMLHttpRequest()
+  xhr.open('GET', url, true)
+  xhr.overrideMimeType 'text/plain; charset=x-user-defined'
+  xhr.onreadystatechange = ->
+    if xhr.readyState == 4
+      callback(parseCoords(xhr.responseText))
+  xhr.send null
+
+points = null
+colors = null
+
+window.setData = (url) ->
+  loadCoords url, (coords) ->
+    points = coords.data
+    colors = (Math.floor(255*Math.random()) for i in [0...points.length])
+    initViewer()
+
+
 cmap = ([i, 0, 255-i] for i in [0...256])
 MIX = .5
 light_cmap = ([255*MIX + (1-MIX)*i, 0, 255*MIX + (1-MIX)*(255-i)] for i in [0...256])
@@ -73,7 +105,7 @@ onMouse = (e) ->
   null
 
 project = (vec) ->
-  x = dot(vec, x_vec); y = dot(vec, y_vec)
+  x = dot(x_vec, vec); y = dot(y_vec, vec)
   [x*zoom+origin_x, y*zoom+origin_y]
 
 window.tick = ->
@@ -82,8 +114,9 @@ window.tick = ->
     arr[offset] = 255
 
   start = new Date
-  for pt in points
-    [vec, cidx] = pt
+  for i in [0...points.length]
+    vec = points[i]
+    cidx = colors[i]
     [x, y] = project vec
     unless (0 < x < w and 0 < y < h)
       continue
@@ -101,7 +134,8 @@ window.tick = ->
 
   start = new Date
   for i in [0...points.length/10]
-    [vec, cidx] = points[i]
+    vec = points[i]
+    cidx = colors[i]
     [x, y] = project vec
     ctx.fillText("pt", Math.floor(x), Math.floor(y))
   labeling_took = new Date - start
