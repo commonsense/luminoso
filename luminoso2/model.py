@@ -21,6 +21,7 @@ from luminoso2.text_readers import get_reader, DOCUMENT, TAG
 from luminoso2.document_handlers import handle_url
 from collections import defaultdict
 import os
+import sys
 from config import Config
 import logging
 import codecs
@@ -54,6 +55,9 @@ class LuminosoModel(object):
         This directory will contain saved versions of various matrices, as
         well as a SQLite database of terms and documents.
         """
+        if not isinstance(model_dir, unicode):
+            # Ensure that paths are unicode.
+            model_dir = model_dir.decode(sys.getfilesystemencoding())
         if not os.access(model_dir, os.R_OK):
             raise IOError("Cannot read the study directory %s. "
                           "Use LuminosoModel.make() to make a new one."
@@ -765,7 +769,6 @@ def run_in_directory(dir, lang='en'):
     return model
 
 def main():
-    import sys
     if len(sys.argv) <= 1:
         print "Usage: model.py <study dir> <language>"
     else:

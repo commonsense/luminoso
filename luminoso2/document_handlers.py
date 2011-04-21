@@ -124,8 +124,11 @@ def handle_directory(dirname):
     """
     Handle a directory and get a stream of documents out of it.
     """
+    if not isinstance(dirname, unicode):
+        # Ensure that paths are unicode.
+        dirname = dirname.decode(sys.getfilesystemencoding())
     for filename in os.listdir(dirname):
-        if not filename.startswith('.'):
+        if not filename.startswith(u'.'):
             for result in handle_url(dirname+os.sep+filename):
                 yield result
 
@@ -136,7 +139,7 @@ def handle_url(url, name=None):
     TODO: handle schemas that aren't local files.
     """
     if os.access(url, os.F_OK):
-        if os.access(url+u'/', os.F_OK): # it's a directory
+        if os.path.isdir(url): # it's a directory
             for result in handle_directory(url):
                 yield result
         elif url.endswith(u'.json') or url.endswith(u'.js'):
