@@ -128,17 +128,21 @@ class window.Viewer
     screenX = @screenX; screenY = @screenY
     w = @imgData.width; h = @imgData.height; arr = @imgData.data
 
+    times = {start: new Date}
+
     # Clear the canvas.
     for offset in [0...w*h*4]
       arr[offset] = 255
 
+    times.cleared = new Date
+
     # Project all the points.
-    start = new Date
     for i in [0...points.length]
       vec = points[i]
       [x, y] = project vec
       screenX[i] = x; screenY[i] = y
-    console.log("Projection took", new Date - start)
+
+    times.projected = new Date
 
     # Draw points.
     start = new Date
@@ -156,25 +160,25 @@ class window.Viewer
       arr[offset-4*w] = light_color[0]; arr[offset-4*w+1] = light_color[1]; arr[offset-4*w+2] = light_color[2]; arr[offset-4*w+3] = 64;
       arr[offset+4*w] = light_color[0]; arr[offset+4*w+1] = light_color[1]; arr[offset+4*w+2] = light_color[2]; arr[offset+4*w+3] = 64;
     @ctx.putImageData(@imgData, 0, 0)
-    drawing_took = new Date - start
-    console.log("Drawing took", drawing_took) if (drawing_took > 33)
+
+    times.drawn = new Date
 
     # Compute distance to mouse
-    start = new Date
     mX = @lastMouseY; mY = @lastMouseY; distToMouse = @distToMouse
     for i in [0...points.length] by 1
       x = screenX[i]; y = screenY[i]
       dx = x-mX; dy = y-mY
       distToMouse[i] = Math.sqrt(dx*dx+dy*dy)
-    console.log "Distance to mouse took", new Date - start
+
+    times.distToMouse = new Date
     
     # Sort by distance to mouse
-    start = new Date
     compare = (a, b) ->
       distToMouse[a] - distToMouse[b]
     @order.sort(compare)
 
-    start = new Date
+    times.sort = new Date
+
     names = @names
     #@ctx.shadowOffsetX=2; @ctx.shadowOffsetY = 2;
     #@ctx.shadowBlur = 1; @ctx.shadowColor = "rgba(0,0,0,0.5)";
@@ -213,8 +217,7 @@ class window.Viewer
           imgd.data[4*offset+3] = 255
       @ctx.putImageData(imgd, 0, 0)
 
-    labeling_took = new Date - start
-    console.log("Labeling ", nLabels, "points took", labeling_took) if (labeling_took > 15)
+    times.labeling = new Date
 
     if new Date - @lastInteraction > @timeout
       console.log('stopping')
