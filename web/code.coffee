@@ -164,7 +164,8 @@ class window.Viewer
     #@ctx.shadowBlur = 1; @ctx.shadowColor = "rgba(0,0,0,0.5)";
     for offset in [0...w*h] by 1
       @labelMask[offset] = 0
-    for i in [0...points.length/100]
+    nLabels = 0
+    for i in [0...points.length]
       idx = order[i]
       x = screenX[idx]; y = screenY[idx]
       unless (0 < x < w and 0 < y < h)
@@ -173,26 +174,31 @@ class window.Viewer
         continue
       textWidth = @ctx.measureText(names[idx]).width
       #console.log names[idx], textWidth
-      left = x #Math.floor(x-textWidth/2)
+      left = Math.floor(x-textWidth/2)
+      right = left+textWidth
+      if @labelMask[(y-6)*w+x] or @labelMask[y*w+left] or @labelMask[y*w+right] or @labelMask[(y-12)*w+left] or @labelMask[(y-12)*w+right]
+        continue
       @ctx.fillText(names[idx], left, y)
+      nLabels++
       for lmY in [y...y-12]
-        offset = lmY * w + left
-        for lmX in [0...textWidth] by 1
-          @labelMask[offset] = 1
-          offset++
+        offset = lmY * w
+        for lmX in [left...right] by 1
+          if 0 < lmX < w
+            @labelMask[offset + lmX] = 1
 
     # Visualize the mask
-    imgd = @ctx.getImageData(0, 0, w, h)
-    for offset in [0...w*h]
-      if @labelMask[offset]
-        imgd.data[4*offset] += 64
-        imgd.data[4*offset+1] -= 64
-        imgd.data[4*offset+2] -= 64
-        imgd.data[4*offset+3] = 255
-    @ctx.putImageData(imgd, 0, 0)
+    if true
+      imgd = @ctx.getImageData(0, 0, w, h)
+      for offset in [0...w*h]
+        if @labelMask[offset]
+          imgd.data[4*offset] += 64
+          imgd.data[4*offset+1] -= 64
+          imgd.data[4*offset+2] -= 64
+          imgd.data[4*offset+3] = 255
+      @ctx.putImageData(imgd, 0, 0)
 
     labeling_took = new Date - start
-    console.log("Labeling ", points.length/100, "points took", labeling_took) if (labeling_took > 15)
+    console.log("Labeling ", nLabels, "points took", labeling_took) if (labeling_took > 15)
 
     if new Date - @lastInteraction > @timeout
       console.log('stopping')
