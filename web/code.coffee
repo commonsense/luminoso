@@ -141,7 +141,9 @@ class window.Viewer
     names = @names
     for i in [0...points.length/10]
       x = screenX[i]; y = screenY[i]
-      @ctx.fillText(names[i], x, y)
+      textWidth = @ctx.measureText(names[i]).width
+      @ctx.fillText(names[i], x-textWidth/2, y)
+
     labeling_took = new Date - start
     console.log("Labeling ", points.length/10, "points took", labeling_took) if (labeling_took > 15)
 
