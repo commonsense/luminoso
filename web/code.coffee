@@ -30,6 +30,7 @@ class window.Viewer
     @projection = new Projection(data.ndim, w, h)
     @screenX = new Uint16Array(@points.length)
     @screenY = new Uint16Array(@points.length)
+    @distToMouse = new Float32Array(@points.length)
     @ctx = @canvas.getContext "2d"
     @imgData = @ctx.getImageData(0, 0, w, h)
 
@@ -37,6 +38,7 @@ class window.Viewer
     @lastInteraction = new Date
     @refresh()
     @mouseButton = 0
+    @lastMouseX = w/2; @lastMouseY = h/2
     $(@canvas)
       .mousemove($.proxy(@onMouseMove, this))
       .mousedown($.proxy(@onMouseDown, this))
@@ -84,7 +86,7 @@ class window.Viewer
       @projection.moveTowards @points[0], e.clientX, e.clientY
     else if @mouseButton == 3
       @projection.shiftOrigin e.clientX - @lastMouseX, e.clientY - @lastMouseY
-      @lastMouseX = e.clientX; @lastMouseY = e.clientY
+    @lastMouseX = e.clientX; @lastMouseY = e.clientY
     @_interacted()
     null
 
@@ -96,6 +98,7 @@ class window.Viewer
 
   onMouseUp: (e) ->
     @mouseButton = 0
+    @lastMouseX = e.clientX; @lastMouseY = e.clientY
 
   tick: ->
     @projection.tick()
@@ -137,15 +140,35 @@ class window.Viewer
     drawing_took = new Date - start
     console.log("Drawing took", drawing_took) if (drawing_took > 33)
 
+    # Compute distance to mouse
+    start = new Date
+    mX = @lastMouseY; mY = @lastMouseY; distToMouse = @distToMouse
+    for i in [0...points.length] by 1
+      x = screenX[i]; y = screenY[i]
+      dx = x-mX; dy = y-mY
+      distToMouse[i] = Math.sqrt(dx*dx+dy*dy)
+    console.log "Distance to mouse took", new Date - start
+    
+    # Sort by distance to mouse
+    start = new Date
+    order = [0...points.length]
+    compare = (a, b) ->
+      distToMouse[a] - distToMouse[b]
+    order.sort(compare)
+    console.log "Sort took", new Date - start
+
     start = new Date
     names = @names
-    for i in [0...points.length/10]
-      x = screenX[i]; y = screenY[i]
-      textWidth = @ctx.measureText(names[i]).width
+    #@ctx.shadowOffsetX=2; @ctx.shadowOffsetY = 2;
+    #@ctx.shadowBlur = 1; @ctx.shadowColor = "rgba(0,0,0,0.5)";
+    for i in [0...points.length/100]
+      idx = order[i]
+      x = screenX[idx]; y = screenY[idx]
+      textWidth = @ctx.measureText(names[idx]).width
       @ctx.fillText(names[i], x-textWidth/2, y)
 
     labeling_took = new Date - start
-    console.log("Labeling ", points.length/10, "points took", labeling_took) if (labeling_took > 15)
+    console.log("Labeling ", points.length/100, "points took", labeling_took) if (labeling_took > 15)
 
     if new Date - @lastInteraction > @timeout
       console.log('stopping')
