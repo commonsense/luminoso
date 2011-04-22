@@ -19,6 +19,7 @@ class window.Viewer
     @timeout = 3000
     @points = null
     @colors = null
+    @screenX = null; @screenY = null
 
   init: (data) ->
     @points = data.points
@@ -27,6 +28,8 @@ class window.Viewer
     w = @canvas.width; h = @canvas.height
 
     @projection = new Projection(data.ndim, w, h)
+    @screenX = new Uint16Array(@points.length)
+    @screenY = new Uint16Array(@points.length)
     @ctx = @canvas.getContext "2d"
     @imgData = @ctx.getImageData(0, 0, w, h)
 
@@ -100,20 +103,31 @@ class window.Viewer
     # Cache really common references
     project = @projection.makeProjector()
     arr = @arr; points = @points; colors = @colors
+    screenX = @screenX; screenY = @screenY
     w = @imgData.width; h = @imgData.height; arr = @imgData.data
+
+    # Clear the canvas.
     for offset in [0...w*h*4]
       arr[offset] = 255
 
+    # Project all the points.
     start = new Date
     for i in [0...points.length]
       vec = points[i]
-      cidx = colors[i]
       [x, y] = project vec
+      screenX[i] = x; screenY[i] = y
+    console.log("Projection took", new Date - start)
+
+    # Draw points.
+    start = new Date
+    for i in [0...points.length]
+      x = screenX[i]; y = screenY[i]
       unless (0 < x < w and 0 < y < h)
         continue
+      cidx = colors[i]
       color = cmap[cidx]
       light_color = light_cmap[cidx]
-      offset = 4*Math.floor((x + w*(Math.floor(y))));
+      offset = 4*(x + w*y);
       arr[offset] = color[0]; arr[offset+1] = color[1]; arr[offset+2] = color[2]; arr[offset+3] = 255;
       arr[offset-4] = light_color[0]; arr[offset-4+1] = light_color[1]; arr[offset-4+2] = light_color[2]; arr[offset-4+3] = 64;
       arr[offset+4] = light_color[0]; arr[offset+4+1] = light_color[1]; arr[offset+4+2] = light_color[2]; arr[offset+4+3] = 64;
@@ -126,10 +140,8 @@ class window.Viewer
     start = new Date
     names = @names
     for i in [0...points.length/10]
-      vec = points[i]
-      cidx = colors[i]
-      [x, y] = project vec
-      @ctx.fillText(names[i], Math.floor(x), Math.floor(y))
+      x = screenX[i]; y = screenY[i]
+      @ctx.fillText(names[i], x, y)
     labeling_took = new Date - start
     console.log("Labeling ", points.length/10, "points took", labeling_took) if (labeling_took > 15)
 
