@@ -9,6 +9,8 @@ cmap = ([i, 0, 255-i] for i in [0...256])
 MIX = .5
 light_cmap = ([255*MIX + (1-MIX)*i, 0, 255*MIX + (1-MIX)*(255-i)] for i in [0...256])
 
+MIN_GRAB_RANGE = 15
+
 class window.Viewer
   constructor: (canvas) ->
     @running = false
@@ -33,7 +35,7 @@ class window.Viewer
     @distToMouse = new Float32Array(@points.length)
     @order = [0...@points.length]
     @labelMask = new Uint8Array(w*h)
-    @heldPoint = null
+    @heldIdx = null
     @ctx = @canvas.getContext "2d"
     @imgData = @ctx.getImageData(0, 0, w, h)
 
@@ -86,8 +88,8 @@ class window.Viewer
 
   onMouseMove: (e) ->
     if @mouseButton == 1
-      if @heldPoint
-        @projection.moveTowards @heldPoint, e.clientX, e.clientY
+      if @heldIdx?
+        @projection.moveTowards @points[@heldIdx], e.clientX, e.clientY
     else if @mouseButton == 3
       @projection.shiftOrigin e.clientX - @lastMouseX, e.clientY - @lastMouseY
     @lastMouseX = e.clientX; @lastMouseY = e.clientY
@@ -98,25 +100,14 @@ class window.Viewer
     @mouseButton = e.which
     if @mouseButton == 1
       # Grab the point closest to the mouse pointer
-      @heldPoint =@points[@order[0]]
-#       @heldPoint = copyVec(@points[@order[0]])
-#       console.log 'grab'
-#       idx = 1
-#       while @distToMouse[@order[idx]] < MIN_GRAB_RANGE
-#         for i in [0...@heldPoint.length]
-#           @heldPoint[i] += @points[@order[idx]]
-#       console.log('Grabbed', idx, 'points')
-#       for i in [0...@heldPoint.length]
-#         @heldPoint[i] /= idx
-        
-      
+      @heldIdx = @order[0]
     @lastMouseX = e.clientX; @lastMouseY = e.clientY
     @_interacted()
     false
 
   onMouseUp: (e) ->
     @mouseButton = 0
-    @heldPoint = null
+    @heldIdx = null
     @lastMouseX = e.clientX; @lastMouseY = e.clientY
 
   tick: ->
@@ -198,6 +189,7 @@ class window.Viewer
       right = left+textWidth
       if @labelMask[(y-6)*w+x] or @labelMask[y*w+left] or @labelMask[y*w+right] or @labelMask[(y-12)*w+left] or @labelMask[(y-12)*w+right]
         continue
+      @ctx.fillStyle = (if idx == @heldIdx then '#ff0000' else '#000000')
       @ctx.fillText(names[idx], left, y)
       nLabels++
       for lmY in [y...y-12]
@@ -207,7 +199,7 @@ class window.Viewer
             @labelMask[offset + lmX] = 1
 
     # Visualize the mask
-    if true
+    if false
       imgd = @ctx.getImageData(0, 0, w, h)
       for offset in [0...w*h]
         if @labelMask[offset]
