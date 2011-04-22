@@ -31,7 +31,9 @@ class window.Viewer
     @screenX = new Uint16Array(@points.length)
     @screenY = new Uint16Array(@points.length)
     @distToMouse = new Float32Array(@points.length)
+    @order = [0...@points.length]
     @labelMask = new Uint8Array(w*h)
+    @heldPoint = null
     @ctx = @canvas.getContext "2d"
     @imgData = @ctx.getImageData(0, 0, w, h)
 
@@ -84,7 +86,8 @@ class window.Viewer
 
   onMouseMove: (e) ->
     if @mouseButton == 1
-      @projection.moveTowards @points[0], e.clientX, e.clientY
+      if @heldPoint
+        @projection.moveTowards @heldPoint, e.clientX, e.clientY
     else if @mouseButton == 3
       @projection.shiftOrigin e.clientX - @lastMouseX, e.clientY - @lastMouseY
     @lastMouseX = e.clientX; @lastMouseY = e.clientY
@@ -93,12 +96,27 @@ class window.Viewer
 
   onMouseDown: (e) ->
     @mouseButton = e.which
+    if @mouseButton == 1
+      # Grab the point closest to the mouse pointer
+      @heldPoint =@points[@order[0]]
+#       @heldPoint = copyVec(@points[@order[0]])
+#       console.log 'grab'
+#       idx = 1
+#       while @distToMouse[@order[idx]] < MIN_GRAB_RANGE
+#         for i in [0...@heldPoint.length]
+#           @heldPoint[i] += @points[@order[idx]]
+#       console.log('Grabbed', idx, 'points')
+#       for i in [0...@heldPoint.length]
+#         @heldPoint[i] /= idx
+        
+      
     @lastMouseX = e.clientX; @lastMouseY = e.clientY
     @_interacted()
     false
 
   onMouseUp: (e) ->
     @mouseButton = 0
+    @heldPoint = null
     @lastMouseX = e.clientX; @lastMouseY = e.clientY
 
   tick: ->
@@ -152,11 +170,9 @@ class window.Viewer
     
     # Sort by distance to mouse
     start = new Date
-    order = [0...points.length]
     compare = (a, b) ->
       distToMouse[a] - distToMouse[b]
-    order.sort(compare)
-    console.log "Sort took", new Date - start
+    @order.sort(compare)
 
     start = new Date
     names = @names
@@ -166,7 +182,7 @@ class window.Viewer
       @labelMask[offset] = 0
     nLabels = 0
     for i in [0...points.length]
-      idx = order[i]
+      idx = @order[i]
       x = screenX[idx]; y = screenY[idx]
       unless (0 < x < w and 0 < y < h)
         continue
