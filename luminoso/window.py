@@ -35,6 +35,7 @@ class MainWindow(QtGui.QMainWindow):
         QtGui.QMainWindow.__init__(self)
 
         self.ui = LuminosoUI(self)
+        self.viewPanels = [self.ui.svdview_panel]
         self.toolbar = self.addToolBar("Toolbar")
         self.toolbar.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
         #self.toolbar.setIconSize(QtCore.QSize(24, 24))
@@ -96,6 +97,23 @@ class MainWindow(QtGui.QMainWindow):
     def __del__(self):
         # De-Sanfordize so that the garbage collector can do its job.
         del self.self
+
+    def duplicate (self):
+        dup = svdview.SVDViewPanel()
+        self.ui.tab_stack.addTab(dup, "Duplicate") 
+	dup.activate(self.results.docs,self.results.projections,self.results.magnitudes,self.results.canonical_filenames)
+        dup.viewer.setState(self.ui.svdview_panel.viewer.getState())
+        self.viewPanels[0] = self.ui.svdview_panel
+        self.viewPanels.append(dup)
+
+    def removeTab(self):
+        if self.ui.tab_stack.currentIndex() == 0:
+            return None
+        self.ui.tab_stack.removeTab(self.ui.tab_stack.currentIndex())
+        self.viewPanels.pop(self.ui.tab_stack.currentIndex())
+    
+    def getCurrentTab(self):
+        return self.viewPanels[self.ui.tab_stack.currentIndex()]
     
     def svdview_select(self):
         #Figure out which concept has been selected
@@ -176,6 +194,8 @@ class MainWindow(QtGui.QMainWindow):
         self.toolbar.addSeparator()
         self.add_action("&Help", "&About...", self.info_luminoso)
         self.add_action("&Help", "&Documentation...", self.doc_luminoso)
+        self.add_action("&Viewer", "&Duplicate", self.duplicate,"Ctrl+D")
+        self.add_action("&Viewer", "&Close Tab", self.removeTab,"Ctrl+W")
     
     def save_svg(self):
         filename = QtGui.QFileDialog.getSaveFileName(self, "Choose where to save this SVG", package_dir)

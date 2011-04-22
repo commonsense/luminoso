@@ -63,9 +63,12 @@ class LuminosoUI(QtGui.QWidget):
         self.lr_splitter.setStretchFactor(1, 3)
         
         self.tab_stack = QtGui.QTabWidget(self.ud_splitter)
+        self.tab_stack2 = QtGui.QTabWidget(self.ud_splitter)
         self.info_page = QtGui.QTextEdit()
+        self.empty_tab = QtGui.QTextEdit()
         self.info_page.setReadOnly(True)
-        self.tab_stack.addTab(self.info_page, "Info")
+        self.tab_stack.addTab(self.svdview_panel, "Main")
+        self.tab_stack2.addTab(self.info_page, "Info")
         self.tab_stack.setSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Maximum)
 
         #Add search text box to toolbar
