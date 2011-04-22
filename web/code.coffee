@@ -31,6 +31,7 @@ class window.Viewer
     @screenX = new Uint16Array(@points.length)
     @screenY = new Uint16Array(@points.length)
     @distToMouse = new Float32Array(@points.length)
+    @labelMask = new Uint8Array(w*h)
     @ctx = @canvas.getContext "2d"
     @imgData = @ctx.getImageData(0, 0, w, h)
 
@@ -105,7 +106,7 @@ class window.Viewer
 
     # Cache really common references
     project = @projection.makeProjector()
-    arr = @arr; points = @points; colors = @colors
+    points = @points; colors = @colors
     screenX = @screenX; screenY = @screenY
     w = @imgData.width; h = @imgData.height; arr = @imgData.data
 
@@ -161,11 +162,34 @@ class window.Viewer
     names = @names
     #@ctx.shadowOffsetX=2; @ctx.shadowOffsetY = 2;
     #@ctx.shadowBlur = 1; @ctx.shadowColor = "rgba(0,0,0,0.5)";
+    for offset in [0...w*h] by 1
+      @labelMask[offset] = 0
     for i in [0...points.length/100]
       idx = order[i]
       x = screenX[idx]; y = screenY[idx]
+      unless (0 < x < w and 0 < y < h)
+        continue
+      if @labelMask[y*w+x]
+        continue
       textWidth = @ctx.measureText(names[idx]).width
-      @ctx.fillText(names[i], x-textWidth/2, y)
+      #console.log names[idx], textWidth
+      left = x #Math.floor(x-textWidth/2)
+      @ctx.fillText(names[idx], left, y)
+      for lmY in [y...y-12]
+        offset = lmY * w + left
+        for lmX in [0...textWidth] by 1
+          @labelMask[offset] = 1
+          offset++
+
+    # Visualize the mask
+    imgd = @ctx.getImageData(0, 0, w, h)
+    for offset in [0...w*h]
+      if @labelMask[offset]
+        imgd.data[4*offset] += 64
+        imgd.data[4*offset+1] -= 64
+        imgd.data[4*offset+2] -= 64
+        imgd.data[4*offset+3] = 255
+    @ctx.putImageData(imgd, 0, 0)
 
     labeling_took = new Date - start
     console.log("Labeling ", points.length/100, "points took", labeling_took) if (labeling_took > 15)
