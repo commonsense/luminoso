@@ -37,6 +37,7 @@ class window.Viewer
     @labelMask = new Uint8Array(w*h)
     @heldIdx = null
     @ctx = @canvas.getContext "2d"
+    @ctx.font = "9pt sans-serif"
     @imgData = @ctx.getImageData(0, 0, w, h)
 
     # Set up animation loop and timers
