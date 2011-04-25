@@ -102,6 +102,7 @@ class window.Viewer
     if @mouseButton == 1
       # Grab the point closest to the mouse pointer
       @heldIdx = @order[0]
+      console.log('grab', @order[0], ' = ', @names[@order[0]], @distToMouse[@order[0]])
     @lastMouseX = e.clientX; @lastMouseY = e.clientY
     @_interacted()
     false
@@ -260,7 +261,7 @@ class Projection
     projX = (x-@origin_x)/@zoom
     projY = (y-@origin_y)/@zoom
 
-    @zoom *= Math.pow(.9995, deltaZoom)
+    @zoom *= Math.pow(.995, deltaZoom)
 
     @origin_x = -(projX * @zoom - x)
     @origin_y = -(projY * @zoom - y)
