@@ -48,6 +48,7 @@ class window.Viewer
       .mousemove($.proxy(@onMouseMove, this))
       .mousedown($.proxy(@onMouseDown, this))
       .mouseup($.proxy(@onMouseUp, this))
+      .mousewheel($.proxy(@onMouseWheel, this))
     null
 
   refresh: ->
@@ -109,6 +110,12 @@ class window.Viewer
     @mouseButton = 0
     @heldIdx = null
     @lastMouseX = e.clientX; @lastMouseY = e.clientY
+
+  onMouseWheel: (e, delta) ->
+    console.log('wheel', delta)
+    @projection.zoomAroundBy(e.clientX, e.clientY, -20*delta)
+    @_interacted()
+    false
 
   tick: ->
     @projection.tick()
@@ -247,6 +254,17 @@ class Projection
   shiftOrigin: (deltaX, deltaY) ->
     @origin_x += deltaX
     @origin_y += deltaY
+
+  zoomAroundBy: (x, y, deltaZoom) ->
+    # in projection coordinates...
+    projX = (x-@origin_x)/@zoom
+    projY = (y-@origin_y)/@zoom
+
+    @zoom *= Math.pow(.9995, deltaZoom)
+
+    @origin_x = -(projX * @zoom - x)
+    @origin_y = -(projY * @zoom - y)
+
 
   # Move a k-space vector towards a screen-point target
   moveTowards: (vec, targetX, targetY) ->
