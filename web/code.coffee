@@ -52,6 +52,7 @@ class window.Viewer
     null
 
   refresh: ->
+    @running = true
     requestAnimFrame($.proxy(@tick, this), @canvas)
 
   _getBinaryAjax: (url, callback) ->
@@ -226,7 +227,6 @@ class window.Viewer
       console.log('stopping')
       @running = false
     else
-      @running = true
       @refresh()
     null
 
