@@ -167,7 +167,7 @@ class window.Viewer
     times.drawn = new Date
 
     # Compute distance to mouse
-    mX = @lastMouseY; mY = @lastMouseY; distToMouse = @distToMouse
+    mX = @lastMouseX; mY = @lastMouseY; distToMouse = @distToMouse
     for i in [0...points.length] by 1
       x = screenX[i]; y = screenY[i]
       dx = x-mX; dy = y-mY
