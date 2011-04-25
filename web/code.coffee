@@ -88,33 +88,37 @@ class window.Viewer
     null
 
   onMouseMove: (e) ->
+    mX = e.pageX-@canvas.offsetLeft-1; mY = e.pageY-@canvas.offsetTop-1
     if @mouseButton == 1
       if @heldIdx?
-        @projection.moveTowards @points[@heldIdx], e.clientX, e.clientY
+        @projection.moveTowards @points[@heldIdx], mX, mY
     else if @mouseButton == 3
-      @projection.shiftOrigin e.clientX - @lastMouseX, e.clientY - @lastMouseY
-    @lastMouseX = e.clientX; @lastMouseY = e.clientY
+      @projection.shiftOrigin mX - @lastMouseX, mY - @lastMouseY
+    @lastMouseX = mX; @lastMouseY = mY
     @_interacted()
     null
 
   onMouseDown: (e) ->
+    mX = e.pageX-@canvas.offsetLeft-1; mY = e.pageY-@canvas.offsetTop-1
     @mouseButton = e.which
     if @mouseButton == 1
       # Grab the point closest to the mouse pointer
       @heldIdx = @order[0]
       console.log('grab', @order[0], ' = ', @names[@order[0]], @distToMouse[@order[0]])
-    @lastMouseX = e.clientX; @lastMouseY = e.clientY
+    @lastMouseX = mX; @lastMouseY = mY
     @_interacted()
     false
 
   onMouseUp: (e) ->
+    mX = e.pageX-@canvas.offsetLeft-1; mY = e.pageY-@canvas.offsetTop-1
     @mouseButton = 0
     @heldIdx = null
-    @lastMouseX = e.clientX; @lastMouseY = e.clientY
+    @lastMouseX = mX; @lastMouseY = mY
 
   onMouseWheel: (e, delta) ->
+    mX = e.pageX-@canvas.offsetLeft-1; mY = e.pageY-@canvas.offsetTop-1
     console.log('wheel', delta)
-    @projection.zoomAroundBy(e.clientX, e.clientY, -20*delta)
+    @projection.zoomAroundBy(mX, mY, -20*delta)
     @_interacted()
     false
 
