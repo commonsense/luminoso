@@ -146,7 +146,11 @@ def handle_url(url, name=None):
 
     TODO: handle schemas that aren't local files.
     """
-    if os.access(url, os.F_OK):
+    if url.startswith('enron://'):
+        from luminoso2.email_handler import handle_enron
+            for result in handle_enron(url):
+                yield result
+    elif os.access(url, os.F_OK):
         if os.path.isdir(url): # it's a directory
             for result in handle_directory(url):
                 yield result
