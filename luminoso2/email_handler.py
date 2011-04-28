@@ -49,7 +49,7 @@ def handle_enron_file(url, name=None):
             last = 'To'
             continue
         last = 'Something'
-    return {u'name': name, u'url': url, u'text': ' '.join(body), u'tags': tags}
+    return {u'name': name, u'url': 'enron://'+url, u'text': ' '.join(body), u'tags': tags}
 
 
 def handle_enron(url):
