@@ -178,7 +178,10 @@ class TermDatabase(object):
         """
         # this boilerplate is turning me off from sqlalchemy. Why can't I have
         # one object that I interact with, instead of four levels of crap?
-        self.sql_engine = create_engine('sqlite:///'+filename)
+        self.sql_engine = create_engine(
+          'sqlite:///'+filename,
+          isolation_level='READ UNCOMMITTED'
+        )
         self.sql_session_maker = sessionmaker(bind=self.sql_engine)
         self.sql_session = self.sql_session_maker()
         Base.metadata.create_all(bind=self.sql_engine)
