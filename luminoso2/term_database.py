@@ -412,6 +412,13 @@ class TermDatabase(object):
             raise NotImplementedError(
                 "I don't know how to handle trigrams or larger"
             )
+
+    def normalized_relevance(self, term):
+        """
+        Returns the relevance of the term divided by its total frequency.
+        """
+        total_frequency = self.count_term(term)
+        return self.term_relevance(term) / total_frequency if total_frequency else 0.0
     
     def top_terms(self, nterms):
         """
@@ -498,7 +505,7 @@ class TermDatabase(object):
         """
         idf = math.log(2 + self.count_term_distinct_documents(ANY))\
             - math.log(1 + self.count_term_distinct_documents(term))
-        return idf        
+        return idf
 
     def tfidf_term_in_document(self, term, document):
         """
