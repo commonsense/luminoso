@@ -1,9 +1,12 @@
 #!/usr/bin/env python
 from luminoso2 import LuminosoModel
+import os, shutil
+if os.access('/tmp/luminoso_profile', os.F_OK):
+    shutil.rmtree('/tmp/luminoso_profile')
 model = LuminosoModel.make_common_sense('/tmp/luminoso_profile', 'en')
 
 def run():
-    model.add_from_url('../models/PLDBStudy/Documents')
+    model.add_from_url('../models/ja_tweets')
 
 if __name__ == '__main__':
     import cProfile, pstats
