@@ -121,6 +121,7 @@ class window.Viewer
     mX = e.pageX-@canvas.offsetLeft-1; mY = e.pageY-@canvas.offsetTop-1
     console.log('wheel', delta)
     @projection.zoomAroundBy(mX, mY, -20*delta)
+    @lastMouseX = mX; @lastMouseY = mY
     @_interacted()
     false
 

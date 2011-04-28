@@ -40,6 +40,8 @@ def handle_text_file(filename, name=None):
     rawtext = f.read()
     f.close()
     encoding = chardet.detect(rawtext)['encoding']
+    # When the encoding is None, assume it's utf-8 because that will probably work.
+    if encoding is None: encoding = 'utf-8'
     try:
         text = rawtext.decode(encoding, 'replace')
     except LookupError:
