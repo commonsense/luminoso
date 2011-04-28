@@ -27,6 +27,22 @@ def ensure_unicode(text):
     else:
         return unicode(text)
 
+def get_file_text(filename):
+    """
+    Get the contents of a text file as unicode; guess its encoding.
+    """
+    f = open(filename, 'rb')
+    rawtext = f.read()
+    f.close()
+    encoding = chardet.detect(rawtext)['encoding']
+    # When the encoding is None, assume it's utf-8 because that will probably work.
+    if encoding is None: encoding = 'utf-8'
+    try:
+        return rawtext.decode(encoding, 'replace')
+    except LookupError:
+        raise UnicodeDecodeError(
+          'File %r uses an unimplemented encoding %r' % (filename, encoding))
+
 def handle_text_file(filename, name=None):
     """
     Handle a file that we believe to contain plain text, in some reasonable
@@ -35,18 +51,7 @@ def handle_text_file(filename, name=None):
     May raise a UnicodeDecodeError if the file uses a codec that Python does
     not yet implement, such as EUC-TW.
     """
-    # open the raw text first, to determine its encoding
-    f = open(filename, 'rb')
-    rawtext = f.read()
-    f.close()
-    encoding = chardet.detect(rawtext)['encoding']
-    # When the encoding is None, assume it's utf-8 because that will probably work.
-    if encoding is None: encoding = 'utf-8'
-    try:
-        text = rawtext.decode(encoding, 'replace')
-    except LookupError:
-        raise UnicodeDecodeError(
-          'File %r uses an unimplemented encoding %r' % (filename, encoding))
+    text = get_file_text(filename)
     for result in handle_text(text, filename, name):
         yield result
 
