@@ -1,9 +1,9 @@
-import os, codecs
+import os
 from dateutil.parser import parse as dateparse
+from luminoso2.document_handlers import get_file_text
 
 def handle_enron_file(url, name=None):
-    mailfile = codecs.open(url, 'r', encoding='utf-8')
-    email = [x.strip() for x in mailfile.readlines()]
+    email = [x.strip() for x in get_file_text(url).split('\n')]
     header = []
     body = []
     prev = []
