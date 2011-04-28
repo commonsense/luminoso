@@ -13,6 +13,7 @@ from sqlalchemy.orm.exc import NoResultFound
 from sqlalchemy.schema import Index
 from sqlalchemy.sql.expression import desc
 from sqlalchemy import create_engine, Column, Integer, Float, String, Text
+from collections import defaultdict
 try:
     import json
 except ImportError:
@@ -149,12 +150,20 @@ class Document(Base):
     name = Column(String, nullable=False)
     reader = Column(String, nullable=False)
     text = Column(Text, nullable=False)
+    terms = Column(Text, nullable=False)
 
-    def __init__(self, docid, name, reader, text):
+    def __init__(self, docid, name, reader, text, terms):
         self.id = docid
         self.name = name
         self.reader = reader
         self.text = text
+        self.terms = json.dumps(terms)
+    
+    def get_terms(self):
+        """
+        Parse the saved data structure of term counts in the document.
+        """
+        return json.loads(self.terms)
     
     def __repr__(self):
         return "<Document %r: %r [%s]>" % (self.id, self.name, self.reader)
@@ -186,6 +195,7 @@ class TermDatabase(object):
         self.sql_session = self.sql_session_maker()
         Base.metadata.create_all(bind=self.sql_engine)
         self.term_count_cache = {}
+        self.term_doc_cache = {}
 
     def _increment_term_count(self, term, value=1, newdoc=False):
         """
@@ -195,29 +205,25 @@ class TermDatabase(object):
         """
         distinct_inc = int(newdoc)
         if term in self.term_count_cache and self.term_count_cache[term] > 0:
-            #self.sql_engine.execute(
-            #  "update terms set count=count+1, "
-            #  "distinct_docs=distinct_docs+:distinct_inc "
-            #  "where term=:term",
-            #  term=term, distinct_inc=distinct_inc
-            #)
             term_entry = self.sql_session.query(Term).get(term)
             term_entry.count += value
             term_entry.distinct_docs += distinct_inc
             self.term_count_cache[term] += 1
+            self.term_doc_cache[term] += distinct_inc
         else:
             term_entry = self.sql_session.query(Term).get(term)
             if term_entry:
                 term_entry.count += value
-                if newdoc:
-                    term_entry.distinct_docs += 1
+                term_entry.distinct_docs += distinct_inc
                 self.term_count_cache[term] = term_entry.count
+                self.term_doc_cache[term] = term_entry.distinct_docs
             else:
                 assert newdoc, "Something is wrong -- how did this term "\
                                "appear without appearing in a document?"
                 term_entry = Term(term, value, 1, 0)
                 self.sql_session.add(term_entry)
                 self.term_count_cache[term] = 1
+                self.term_doc_cache[term] = 1
         
     def _increment_term_document_count(self, document, term, value=1):
         """
@@ -236,23 +242,7 @@ class TermDatabase(object):
             term_entry = TermInDocument(term, document, value)
             self.sql_session.add(term_entry)
             return True
-    
-    def increment_term_in_document(self, document, term, value=1):
-        """
-        Record the fact that a given term appeared in a given document, with
-        weight `value`. This will additionally update the relevance value
-        of the term, and if the term is a tag, record the tag on the document.
-
-        This does not automatically commit changes to the database.
-        """
-        if isinstance(term, tuple) and term[0] == TAG:
-            return self.set_tag_on_document(document, term[1], term[2])
-        newdoc = self._increment_term_document_count(document, term, value)
-        absv = abs(value)
-        self._increment_term_count(term, absv, newdoc)
-        newdoc_any = self._increment_term_document_count(document, ANY, absv)
-        self._increment_term_count(ANY, absv, newdoc_any)
-    
+        
     def update_relevance(self):
         query = self.sql_session.query(Term)\
                   .filter(Term.count >= 2)
@@ -318,18 +308,23 @@ class TermDatabase(object):
                 return
             self._clear_document(docid)
         
+        term_counts = defaultdict(int)
         for term in terms:
             if isinstance(term, tuple):
                 # this is a (term, value) tuple
                 term, value = term
             else:
                 value = 1
-            self.increment_term_in_document(docid, term, value)
+            term_counts[term] += value
+        term_items = term_counts.items()
+
+        for term, value in term_counts.items():
+            self._increment_term_count(term, value, True)
 
         for key, value in doc_info.get('tags', []):
             self.set_tag_on_document(docid, key, value)
         
-        doc = Document(docid, docname, reader_name, text)
+        doc = Document(docid, docname, reader_name, text, term_items)
         self.sql_session.add(doc)
         #self.commit()
 
@@ -438,24 +433,28 @@ class TermDatabase(object):
     def count_term_in_document(self, term, document):
         """
         Get the number of times the given term appeared in the given document.
+
+        NOTE: This is inefficient, and we should avoid using it.
         """
-        query = self.sql_session.query(TermInDocument)\
-                  .filter(TermInDocument.term == term)\
-                  .filter(TermInDocument.document == document)
-        try:
-            term_entry = query.one()
-            return term_entry.count
-        except NoResultFound:
-            return 0
+        doc = self.get_document(document)
+        for docterm, value in doc.get_terms():
+            if docterm == term:
+                return value
+        return 0
     
     def count_term_distinct_documents(self, term):
         """
         Get the number of distinct documents a term has appeared in.
         """
+        if term in self.term_doc_cache:
+            return self.term_doc_cache[term]
+
         term_entry = self.sql_session.query(Term).get(term)
         if term_entry:
+            self.term_count_cache[term] = term_entry.distinct_docs
             return term_entry.distinct_docs
         else:
+            self.term_doc_cache[term] = 0
             return 0
 
     def count_documents(self):
