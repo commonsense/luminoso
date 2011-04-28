@@ -49,21 +49,27 @@ def handle_enron_file(url, name=None):
             last = 'To'
             continue
         last = 'Something'
-     return {u'name': name, u'url': url, u'text': ' '.join(body), u'tags': tags}
+    return {u'name': name, u'url': url, u'text': ' '.join(body), u'tags': tags}
 
 
 def handle_enron(url):
     if url.startswith('enron://'): url = url[8:]
-
+    if not isinstance(url, unicode): url = url.decode('utf-8')
+    
     # Handle a single file
     if not os.path.isdir(url):
         yield handle_enron_file(url)
         return
 
     # Handle a directory.
-    for path, dirs, files in os.walk(basedir):
-        for file in files:
-            if file[0] == '.': continue
-            local = path.sub(basedir, '').split(os.sep)
-            if local[1] == 'discussion_threads': continue
-            yield handle_enron_file(os.path.join(path, file))
+    for user in os.listdir(url):
+        user_path = os.path.join(url, user)
+        if user.startswith('.') or not os.path.isdir(user_path): continue
+        for folder in os.listdir(user_path):
+            folder_path = os.path.join(user_path, folder)
+            if folder.startswith('.') or not os.path.isdir(folder_path): continue
+            if folder == 'discussion_threads': continue
+            for message in os.listdir(folder_path):
+                if message.startswith('.'): continue
+                yield handle_enron_file(os.path.join(folder_path, message), name='%s/%s/%s' % (user, folder, message))
+
