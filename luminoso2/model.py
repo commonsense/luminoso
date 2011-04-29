@@ -289,10 +289,12 @@ class LuminosoModel(object):
         while True:
             if len(batch) == batch_size:
                 self.add_batch(lambda: iter(batch), study, learn_iterations)
+                batch[:] = []
             try:
                 batch.append(next(stream))
             except StopIteration:
                 self.add_batch(lambda: iter(batch), study, learn_iterations)
+                batch[:] = []
                 break
 
     def add_batch(self, stream_func, study=None, learn_iterations=0):
