@@ -1,10 +1,3 @@
-
-$ ->
-  # Canvas init
-  window.viewer = new Viewer(document.getElementById("canvas"))
-  window.viewer.setData('pldb')
-  null
-
 cmap = ([i, 0, 255-i] for i in [0...256])
 MIX = .5
 light_cmap = ([255*MIX + (1-MIX)*i, 0, 255*MIX + (1-MIX)*(255-i)] for i in [0...256])
@@ -65,18 +58,18 @@ class window.Viewer
         callback(parseCoords(xhr.responseText))
     xhr.send null
 
-  setData: (url) ->
+  setData: (coordsUrl, namesUrl) ->
     data = {}
     maybeInit = =>
       @init data if (data.points? and data.names?)
     
-    @_getBinaryAjax url+'.coords', (coords) =>
+    @_getBinaryAjax coordsUrl, (coords) =>
       data.ndim = coords.ndim
       data.points = coords.data
       maybeInit()
 
     $.ajax
-      url: url+'.names'
+      url: namesUrl,
       dataType: 'text'
       success: (names) =>
         data.names = names.split('\n')

@@ -18,7 +18,13 @@ window.requestAnimFrame = (function(){
     })();
 </script>
 <script type="text/javascript" src="readBin.js"></script>
-<script type="text/javascript" src="code.js"></script>
+<script type="text/javascript" src="viewer.js"></script>
+<script type="text/javascript">
+$(function() {
+  window.viewer = new Viewer(document.getElementById("canvas"))
+  window.viewer.setData('pldb.coords', 'pldb.names')
+});
+</script>
 </head>
 
 <body>
