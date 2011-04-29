@@ -5,7 +5,7 @@ $(function() {
   var docs = $('#docs')
   docs.change(function() {
     var url = docs.val()
-    $.getJSON('/doc/?url='+url, function(data) {
+    $.getJSON('/docs?url='+url, function(data) {
       $('#contents').text(data.text);
     });
   });
