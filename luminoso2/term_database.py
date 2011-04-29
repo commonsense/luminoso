@@ -9,6 +9,7 @@ import math
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.orm.exc import NoResultFound
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.schema import Index
 from sqlalchemy.sql.expression import desc
 from sqlalchemy import create_engine, Column, Integer, Float, String, Text
@@ -43,13 +44,15 @@ def bigram_likelihood_ratio(n_12, n_1, n_2, n):
     - `n_2` is the number of occurrences of the second word.
     - `n` is the total number of words learned.
     """
-    n_o2 = n_2 - n_12
-    n_1o = n_1 - n_12
-    n_oo = n - n_12 - n_1o - n_o2
+    n_o2 = max(n_2 - n_12, 0)
+    n_1o = max(n_1 - n_12, 0)
+    n_oo = max(n - n_12 - n_1o - n_o2, 0)
     contingency = [n_12, n_o2, n_1o, n_oo]
     if sum(contingency) == 0:
         # the database is empty, so relevance == 0 
         return 0.0
+    for value in contingency:
+        assert value >= 0
     expected = _expected_values(contingency)
 
     # the magic formula from NLTK
@@ -188,7 +191,6 @@ class TermDatabase(object):
         `value`. Also, if `newdoc` is True, increment the number of distinct
         documents containing the term.
         """
-        assert value >= 0
         distinct_inc = int(newdoc)
         term_entry = self.get_term(term)
         if term_entry:
@@ -259,7 +261,7 @@ class TermDatabase(object):
         terms = doc_info[u'terms']
         text = doc_info[u'text']
         reader_name = doc_info[u'reader']
-        doc = self.sql_session.query(Document).get(docid)
+        doc = self.get_document(docid)
         if doc is not None:
             if doc.text == text and doc.reader == reader_name:
                 # nothing has changed, so return
@@ -292,7 +294,12 @@ class TermDatabase(object):
         """
         Get a Document from the database by its ID (URL).
         """
-        return self.sql_session.query(Document).get(docid)
+        try:
+            return self.sql_session.query(Document).get(docid)
+        except OperationalError:
+            raise IOError("Sorry, this database is incompatible with the "
+                          "current version of Luminoso. If you want, you can "
+                          "delete the model directory and start again.")
     
     def get_document_tags(self, docid):
         """
@@ -315,7 +322,7 @@ class TermDatabase(object):
         doc = self.get_document(docid)
         for term, count in doc.get_terms():
             term_entry = self.sql_session.query(Term).get(term)
-            term_entry.count -= count
+            term_entry.count -= abs(count)
             term_entry.distinct_docs -= 1
         any_term = self.sql_session.query(Term).get(ANY)
         any_term.distinct_docs -= 1

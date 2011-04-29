@@ -218,9 +218,9 @@ class LuminosoModel(object):
         LOG.info("Collecting connections from: %r" % docid)
         connections = self.get_document_connections(docid)
         for weight, term1, term2 in connections:
-            if term1 != DOCUMENT:
-                norm_factor = (self.database.count_term(term1)
-                               * self.database.count_term(term2)) ** .5
+            if weight > 0 and term1 != DOCUMENT:
+                norm_factor = ((self.database.count_term(term1) + 1)
+                               * (self.database.count_term(term2) + 1)) ** .5
                 yield weight/norm_factor, term1, term2
     
     def index_term(self, term, priority=None):
@@ -274,7 +274,7 @@ class LuminosoModel(object):
         self.save_assoc()
         self.save_config()
 
-    def add_from_url(self, url, study=None, learn_iterations=0, batch_size=50):
+    def add_from_url(self, url, study=None, learn_iterations=0, batch_size=1000):
         """
         Given a URL or file path that points to a collection of documents,
         add all the documents to the database. If `learn_iterations` is 0,
@@ -684,7 +684,7 @@ class LuminosoModel(object):
             config = _default_config()
             config['reader'] = 'simplenlp.'+lang
         if os.access(model_dir, os.F_OK):
-            raise IOError("The model directory %r already exists." % model_dir)
+            raise StudyExists("The model directory %r already exists." % model_dir)
         LOG.info("Making common sense matrix")
         assoc = divisi2.network.conceptnet_assoc(lang)
         (mat_U, diag_S, _) = assoc.normalize_all().svd(k=100)
