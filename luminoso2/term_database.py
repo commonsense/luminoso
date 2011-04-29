@@ -169,8 +169,18 @@ class TermDatabase(object):
         self.sql_session_maker = sessionmaker(bind=self.sql_engine)
         self.sql_session = self.sql_session_maker()
         Base.metadata.create_all(bind=self.sql_engine)
-        self.term_count_cache = {}
-        self.term_doc_cache = {}
+        self.term_cache = {}    
+    
+    def get_term(self, term):
+        if term in self.term_cache:
+            return self.term_cache[term]
+        else:
+            term_entry = self.sql_session.query(Term).get(term)
+            if term_entry:
+                self.term_cache[term] = term_entry
+                return term_entry
+            else:
+                return None
 
     def _increment_term_count(self, term, value=1, newdoc=False):
         """
@@ -180,26 +190,16 @@ class TermDatabase(object):
         """
         assert value >= 0
         distinct_inc = int(newdoc)
-        if term in self.term_count_cache and self.term_count_cache[term] > 0:
-            term_entry = self.sql_session.query(Term).get(term)
+        term_entry = self.get_term(term)
+        if term_entry:
             term_entry.count += value
             term_entry.distinct_docs += distinct_inc
-            self.term_count_cache[term] += value
-            self.term_doc_cache[term] += distinct_inc
         else:
-            term_entry = self.sql_session.query(Term).get(term)
-            if term_entry:
-                term_entry.count += value
-                term_entry.distinct_docs += distinct_inc
-                self.term_count_cache[term] = term_entry.count
-                self.term_doc_cache[term] = term_entry.distinct_docs
-            else:
-                assert newdoc, "Something is wrong -- how did this term "\
-                               "appear without appearing in a document?"
-                term_entry = Term(term, value, 1, 0)
-                self.sql_session.add(term_entry)
-                self.term_count_cache[term] = value
-                self.term_doc_cache[term] = 1
+            assert newdoc, "Something is wrong -- how did this term "\
+                           "appear without appearing in a document?"
+            term_entry = Term(term, value, 1, 0)
+            self.sql_session.add(term_entry)
+            self.term_cache[term] = term_entry
         
     def update_relevance(self):
         query = self.sql_session.query(Term)\
@@ -334,14 +334,10 @@ class TermDatabase(object):
         Returns the number of times we have seen this term.
         From the cache, if possible.
         """
-        if term in self.term_count_cache:
-            return self.term_count_cache[term]
-        term_entry = self.sql_session.query(Term).get(term)
+        term_entry = self.get_term(term)
         if term_entry:
-            self.term_count_cache[term] = term_entry.count
             return term_entry.count
         else:
-            self.term_count_cache[term] = 0
             return 0
 
     def term_relevance(self, term):
@@ -411,15 +407,10 @@ class TermDatabase(object):
         """
         Get the number of distinct documents a term has appeared in.
         """
-        if term in self.term_doc_cache:
-            return self.term_doc_cache[term]
-
-        term_entry = self.sql_session.query(Term).get(term)
+        term_entry = self.get_term(term)
         if term_entry:
-            self.term_count_cache[term] = term_entry.distinct_docs
             return term_entry.distinct_docs
         else:
-            self.term_doc_cache[term] = 0
             return 0
 
     def count_documents(self):
