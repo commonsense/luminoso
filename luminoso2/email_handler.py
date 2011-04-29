@@ -65,11 +65,11 @@ def handle_enron(url):
     for user in os.listdir(url):
         user_path = os.path.join(url, user)
         if user.startswith('.') or not os.path.isdir(user_path): continue
-        for folder in os.listdir(user_path):
-            folder_path = os.path.join(user_path, folder)
-            if folder.startswith('.') or not os.path.isdir(folder_path): continue
-            if folder == 'discussion_threads': continue
-            for message in os.listdir(folder_path):
-                if message.startswith('.'): continue
-                yield handle_enron_file(os.path.join(folder_path, message), name='%s/%s/%s' % (user, folder, message))
+        for path, dirs, files in os.walk(user_path):
+            relpath = path.replace(url, u'').lstrip(os.sep)
+            if 'discussion_threads' in dirs:
+                dirs.remove('discussion_threads')
+            for filename in files:
+                if filename.startswith('.'): continue
+                yield handle_enron_file(os.path.join(path, filename), name='%s/%s' % (relpath, filename))
 
