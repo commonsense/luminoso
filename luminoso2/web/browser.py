@@ -1,5 +1,6 @@
 import tornado.ioloop
 import tornado.web
+import tornadio
 import sys, luminoso2
 import json
 model = None
@@ -33,10 +34,45 @@ class DocsHandler(tornado.web.RequestHandler):
             text=doc.text,
             tags=tags)))
 
+
+class Channel(tornadio.SocketConnection):
+    active_channels = set()
+
+    def on_open(self, request, *a, **kw):
+        self.active_channels.add(self)
+        self.send('Connected.')
+
+    def on_message(self, message):
+        print "Message"
+
+    def on_close(self):
+        self.active_channels.remove(self)
+
+    @classmethod
+    def send_to_all(self, message):
+        for channel in self.active_channels:
+            channel.send(message)
+
+opts = dict(
+    template_path='templates',
+    enabled_protocols = ['websocket', 'xhr-multipart', 'xhr-polling'],
+    socket_io_port = 8888,
+)
+
 application = tornado.web.Application([
   (r'/', MainHandler),
-  (r'/docs', DocsHandler)
-], template_path='templates')
+  (r'/docs', DocsHandler),
+  tornadio.get_router(Channel).route()
+], **opts)
+
+def tick():
+    import datetime
+    timestamp = datetime.datetime.now().isoformat()
+    print 'test', timestamp
+    Channel.send_to_all(timestamp)
+
+periodic = tornado.ioloop.PeriodicCallback(tick, 1000)
+periodic.start()
 
 if __name__ == '__main__':
     model_path = sys.argv[1]

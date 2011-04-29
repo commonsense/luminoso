@@ -1,7 +1,20 @@
 <!doctype html>
 <script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.5.2/jquery.min.js"></script>
+<script src="http://cdn.socket.io/stable/socket.io.js"></script>
 <script type="text/javascript">
+var socket;
+
 $(function() {
+  socket = new io.Socket(window.location.hostname, {port: 8888, rememberTransport: false})
+  socket.connect()
+
+  socket.addEvent('connect', function() {
+    console.log('connected');
+  });
+  socket.addEvent('message', function(data) {
+    console.log(data);
+  })
+
   var docs = $('#docs')
   docs.change(function() {
     var url = docs.val()
