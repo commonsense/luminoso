@@ -274,7 +274,7 @@ class LuminosoModel(object):
         self.save_assoc()
         self.save_config()
 
-    def add_from_url(self, url, study=None, learn_iterations=0):
+    def add_from_url(self, url, study=None, learn_iterations=0, batch_size=50):
         """
         Given a URL or file path that points to a collection of documents,
         add all the documents to the database. If `learn_iterations` is 0,
@@ -284,7 +284,18 @@ class LuminosoModel(object):
         This is the main loop that one should use to train a model with a
         batch of documents.
         """
-        self.add_batch(lambda: handle_url(url), study, learn_iterations)
+        stream = handle_url(url)
+        batch = []
+        while True:
+            if len(batch) == batch_size:
+                self.add_batch(lambda: iter(batch), study, learn_iterations)
+                batch[:] = []
+            try:
+                batch.append(next(stream))
+            except StopIteration:
+                self.add_batch(lambda: iter(batch), study, learn_iterations)
+                batch[:] = []
+                break
 
     def add_batch(self, stream_func, study=None, learn_iterations=0):
         """
