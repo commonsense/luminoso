@@ -59,7 +59,7 @@ class Channel(tornadio.SocketConnection):
         self.send('Connected.')
 
     def on_message(self, message):
-        print "Message"
+        print "Message", message
 
     def on_close(self):
         self.active_channels.remove(self)
@@ -86,10 +86,9 @@ application = tornado.web.Application([
 def tick():
     import datetime
     timestamp = datetime.datetime.now().isoformat()
-    print 'test', timestamp
     Channel.send_to_all(timestamp)
 
-periodic = tornado.ioloop.PeriodicCallback(tick, 1000)
+periodic = tornado.ioloop.PeriodicCallback(tick, 5000)
 periodic.start()
 
 if __name__ == '__main__':
