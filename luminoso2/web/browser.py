@@ -4,17 +4,21 @@ import tornadio
 import luminoso2
 import sys, os
 import json
-_model = None
 
+_model = None
 def get_model():
     global _model
     if _model is None:
         _model = luminoso2.load(model_path)
     return _model
 
+from jinja2 import Environment, PackageLoader
+env = Environment(loader=PackageLoader('luminoso2.web', 'templates'))
+
 class MainHandler(tornado.web.RequestHandler):
     def get(self):
-        self.render("index.html")
+        template = env.get_template('index.html')
+        self.write(template.render())
 
 class DocsHandler(tornado.web.RequestHandler):
     def initialize(self):
