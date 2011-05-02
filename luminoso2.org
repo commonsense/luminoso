@@ -54,10 +54,10 @@ for vim.
   
   - [ ] Transitional PyQt interface
 
-  - [ ] HTML/JS interface (job for a UROP?) [0/5]
+  - [ ] HTML/JS interface (job for a UROP?) [1/5]
     - [ ] Some interface for choosing data sources (could be messy!)
     - [ ] Interface for configuration, including choosing a reader
-    - [ ] Ken's visualizer
+    - [X] Ken's visualizer
     - [ ] Report writer
     - [ ] Document
       - [ ] Tutorial

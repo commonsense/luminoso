@@ -218,9 +218,9 @@ class LuminosoModel(object):
         LOG.info("Collecting connections from: %r" % docid)
         connections = self.get_document_connections(docid)
         for weight, term1, term2 in connections:
-            if term1 != DOCUMENT:
-                norm_factor = (self.database.count_term(term1)
-                               * self.database.count_term(term2)) ** .5
+            if weight > 0 and term1 != DOCUMENT:
+                norm_factor = ((self.database.count_term(term1) + 1)
+                               * (self.database.count_term(term2) + 1)) ** .5
                 yield weight/norm_factor, term1, term2
     
     def index_term(self, term, priority=None):
@@ -276,7 +276,7 @@ class LuminosoModel(object):
     # compatibility with previous docs
     learn_from_url = learn_from
 
-    def add_from(self, url, study=None, learn_iterations=0):
+    def add_from(self, url, study=None, learn_iterations=0, batch_size=1000):
         """
         Given a URL or file path that points to a collection of documents,
         add all the documents to the database. If `learn_iterations` is 0,
@@ -286,7 +286,18 @@ class LuminosoModel(object):
         This is the main loop that one should use to train a model with a
         batch of documents.
         """
-        self.add_batch(lambda: handle_url(url), study, learn_iterations)
+        stream = handle_url(url)
+        batch = []
+        while True:
+            if len(batch) == batch_size:
+                self.add_batch(lambda: iter(batch), study, learn_iterations)
+                batch[:] = []
+            try:
+                batch.append(next(stream))
+            except StopIteration:
+                self.add_batch(lambda: iter(batch), study, learn_iterations)
+                batch[:] = []
+                break
     add_from_url = add_from
 
     def add_batch(self, stream_func, study=None, learn_iterations=0):
@@ -456,8 +467,8 @@ class LuminosoModel(object):
         for term, weight in terms:
             if term in self.priority:
                 index = self.priority.index(term)
-                tfidf_weight = weight * self.get_term_idf(term) / total_weight
-                vec[index] = tfidf_weight
+                tfidf_weight = weight * self.get_term_idf(term) * self.database.normalized_relevance(term)
+                vec[index] = tfidf_weight / total_weight
         category = divisi2.dot(vec, self.assoc.left)
         return category
 
@@ -676,7 +687,7 @@ class LuminosoModel(object):
             config = _default_config()
             config['reader'] = 'simplenlp.'+lang
         if os.access(model_dir, os.F_OK):
-            raise IOError("The model directory %r already exists." % model_dir)
+            raise StudyExists("The model directory %r already exists." % model_dir)
         LOG.info("Making common sense matrix")
         assoc = divisi2.network.conceptnet_assoc(lang)
         (mat_U, diag_S, _) = assoc.normalize_all().svd(k=100)
