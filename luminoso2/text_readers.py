@@ -348,7 +348,7 @@ READERS = {
 
 LANGUAGE_DEFAULTS = {
     'en': 'simplenlp.en',
-    'ja': 'mecab'
+    'ja': 'simplenlp.ja'
 }
 
 def get_reader(name):

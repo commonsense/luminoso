@@ -12,21 +12,13 @@ def setup_module():
 def teardown_module():
     shutil.rmtree(TEMPDIR)
 
-def test_increment():
-    themodel = LuminosoModel.make_empty(TEMPDIR+'/test_increment')
-    newdoc = themodel.database._increment_term_document_count('#test1', '*')
-    assert newdoc
-    newdoc = themodel.database._increment_term_document_count('#test1', '*')
-    assert not newdoc
-    newdoc = themodel.database._increment_term_document_count('#test1', 'yay')
-    assert newdoc
-
 def test_documents():
     themodel = LuminosoModel.make_empty(TEMPDIR+'/test_documents')
     #themodel.add_document(dict(url='#test1', name='test one',
     #                           text='one two three'))
     themodel.add_document(dict(url='#test1', name='test one',
                                text='two three'))
+    assert_equal(themodel.database.count_term('*'), 3)
     assert_equal(themodel.database.count_documents(), 1)
     themodel.add_document(dict(url='#test2', name='test two',
                                text='two three four'))

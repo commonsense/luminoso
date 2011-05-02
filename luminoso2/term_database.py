@@ -4,15 +4,16 @@ number of times various terms appear, and the number of times they appear
 in each document.
 """
 import math
-from luminoso2.text_readers import TAG
 
 # all the messy SQLAlchemy imports
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.orm.exc import NoResultFound
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.schema import Index
 from sqlalchemy.sql.expression import desc
 from sqlalchemy import create_engine, Column, Integer, Float, String, Text
+from collections import defaultdict
 try:
     import json
 except ImportError:
@@ -43,10 +44,15 @@ def bigram_likelihood_ratio(n_12, n_1, n_2, n):
     - `n_2` is the number of occurrences of the second word.
     - `n` is the total number of words learned.
     """
-    n_o2 = n_2 - n_12
-    n_1o = n_1 - n_12
-    n_oo = n - n_12 - n_1o - n_o2
-    contingency = [n_12+1, n_o2+1, n_1o+1, n_oo+1]
+    n_o2 = max(n_2 - n_12, 0)
+    n_1o = max(n_1 - n_12, 0)
+    n_oo = max(n - n_12 - n_1o - n_o2, 0)
+    contingency = [n_12, n_o2, n_1o, n_oo]
+    if sum(contingency) == 0:
+        # the database is empty, so relevance == 0 
+        return 0.0
+    for value in contingency:
+        assert value >= 0
     expected = _expected_values(contingency)
 
     # the magic formula from NLTK
@@ -88,33 +94,6 @@ class Term(Base):
                                                          self.count,
                                                          self.distinct_docs)
 
-class TermInDocument(Base):
-    """
-    Information about the number of occurrences of a term in a document.
-
-    These objects are not provided with knowledge about what database they are
-    actually in, so the actual work must be done by :class:`TermDatabase`.
-    """
-    __tablename__ = 'document_terms'
-    id = Column(Integer, primary_key=True)
-    term = Column(String, nullable=False, index=True)
-    document = Column(String, nullable=False, index=True)
-    count = Column(Integer, nullable=False)
-
-    def __init__(self, term, document, count):
-        self.term = term
-        self.document = document
-        self.count = count
-
-    def __repr__(self):
-        return "<%r in %r, %d occurrences>" % (self.term,
-                                               self.document, 
-                                               self.count)
-
-Index('idx_term_document',
-      TermInDocument.__table__.c.term,
-      TermInDocument.__table__.c.document,
-      unique=True)
 
 class Feature(Base):
     """
@@ -149,12 +128,20 @@ class Document(Base):
     name = Column(String, nullable=False)
     reader = Column(String, nullable=False)
     text = Column(Text, nullable=False)
+    terms = Column(Text, nullable=False)
 
-    def __init__(self, docid, name, reader, text):
+    def __init__(self, docid, name, reader, text, terms):
         self.id = docid
         self.name = name
         self.reader = reader
         self.text = text
+        self.terms = json.dumps(terms)
+    
+    def get_terms(self):
+        """
+        Parse the saved data structure of term counts in the document.
+        """
+        return json.loads(self.terms)
     
     def __repr__(self):
         return "<Document %r: %r [%s]>" % (self.id, self.name, self.reader)
@@ -178,11 +165,25 @@ class TermDatabase(object):
         """
         # this boilerplate is turning me off from sqlalchemy. Why can't I have
         # one object that I interact with, instead of four levels of crap?
-        self.sql_engine = create_engine('sqlite:///'+filename)
+        self.sql_engine = create_engine(
+          'sqlite:///'+filename,
+          isolation_level='READ UNCOMMITTED'
+        )
         self.sql_session_maker = sessionmaker(bind=self.sql_engine)
         self.sql_session = self.sql_session_maker()
         Base.metadata.create_all(bind=self.sql_engine)
-        self.term_count_cache = {}
+        self.term_cache = {}    
+    
+    def get_term(self, term):
+        if term in self.term_cache:
+            return self.term_cache[term]
+        else:
+            term_entry = self.sql_session.query(Term).get(term)
+            if term_entry:
+                self.term_cache[term] = term_entry
+                return term_entry
+            else:
+                return None
 
     def _increment_term_count(self, term, value=1, newdoc=False):
         """
@@ -191,65 +192,17 @@ class TermDatabase(object):
         documents containing the term.
         """
         distinct_inc = int(newdoc)
-        if term in self.term_count_cache and self.term_count_cache[term] > 0:
-            #self.sql_engine.execute(
-            #  "update terms set count=count+1, "
-            #  "distinct_docs=distinct_docs+:distinct_inc "
-            #  "where term=:term",
-            #  term=term, distinct_inc=distinct_inc
-            #)
-            term_entry = self.sql_session.query(Term).get(term)
+        term_entry = self.get_term(term)
+        if term_entry:
             term_entry.count += value
             term_entry.distinct_docs += distinct_inc
-            self.term_count_cache[term] += 1
         else:
-            term_entry = self.sql_session.query(Term).get(term)
-            if term_entry:
-                term_entry.count += value
-                if newdoc:
-                    term_entry.distinct_docs += 1
-                self.term_count_cache[term] = term_entry.count
-            else:
-                assert newdoc, "Something is wrong -- how did this term "\
-                               "appear without appearing in a document?"
-                term_entry = Term(term, value, 1, 0)
-                self.sql_session.add(term_entry)
-                self.term_count_cache[term] = 1
-        
-    def _increment_term_document_count(self, document, term, value=1):
-        """
-        Increments the count of a term in a document. Returns True if that
-        term has not appeared in that document before, so that the Term
-        entry can also make note of that.
-        """
-        query = self.sql_session.query(TermInDocument)\
-                  .filter(TermInDocument.term == term)\
-                  .filter(TermInDocument.document == document)
-        try:
-            term_entry = query.one()
-            term_entry.count += value
-            return False
-        except NoResultFound:
-            term_entry = TermInDocument(term, document, value)
+            assert newdoc, "Something is wrong -- how did this term "\
+                           "appear without appearing in a document?"
+            term_entry = Term(term, value, 1, 0)
             self.sql_session.add(term_entry)
-            return True
-    
-    def increment_term_in_document(self, document, term, value=1):
-        """
-        Record the fact that a given term appeared in a given document, with
-        weight `value`. This will additionally update the relevance value
-        of the term, and if the term is a tag, record the tag on the document.
-
-        This does not automatically commit changes to the database.
-        """
-        if isinstance(term, tuple) and term[0] == TAG:
-            return self.set_tag_on_document(document, term[1], term[2])
-        newdoc = self._increment_term_document_count(document, term, value)
-        absv = abs(value)
-        self._increment_term_count(term, absv, newdoc)
-        newdoc_any = self._increment_term_document_count(document, ANY, absv)
-        self._increment_term_count(ANY, absv, newdoc_any)
-    
+            self.term_cache[term] = term_entry
+        
     def update_relevance(self):
         query = self.sql_session.query(Term)\
                   .filter(Term.count >= 2)
@@ -298,7 +251,7 @@ class TermDatabase(object):
         """
         Record the terms in a document in the database. If the database already
         has a document with this name, that document will be replaced.
-
+        
         The terms must already be extracted by some other process, and saved
         into the document dictionary as the key 'terms'.
         `reader_name` indicates which reader was used.
@@ -308,25 +261,32 @@ class TermDatabase(object):
         terms = doc_info[u'terms']
         text = doc_info[u'text']
         reader_name = doc_info[u'reader']
-        doc = self.sql_session.query(Document).get(docid)
+        doc = self.get_document(docid)
         if doc is not None:
             if doc.text == text and doc.reader == reader_name:
                 # nothing has changed, so return
                 return
             self._clear_document(docid)
         
+        term_counts = defaultdict(int)
         for term in terms:
             if isinstance(term, tuple):
                 # this is a (term, value) tuple
                 term, value = term
             else:
                 value = 1
-            self.increment_term_in_document(docid, term, value)
+            term_counts[term] += value
+        term_items = term_counts.items()
+        total = 0
+        for term, value in term_counts.items():
+            self._increment_term_count(term, abs(value), True)
+            total += abs(value)
+        self._increment_term_count(ANY, total, True)
 
         for key, value in doc_info.get('tags', []):
             self.set_tag_on_document(docid, key, value)
         
-        doc = Document(docid, docname, reader_name, text)
+        doc = Document(docid, docname, reader_name, text, term_items)
         self.sql_session.add(doc)
         #self.commit()
 
@@ -334,7 +294,12 @@ class TermDatabase(object):
         """
         Get a Document from the database by its ID (URL).
         """
-        return self.sql_session.query(Document).get(docid)
+        try:
+            return self.sql_session.query(Document).get(docid)
+        except OperationalError:
+            raise IOError("Sorry, this database is incompatible with the "
+                          "current version of Luminoso. If you want, you can "
+                          "delete the model directory and start again.")
     
     def get_document_tags(self, docid):
         """
@@ -347,20 +312,18 @@ class TermDatabase(object):
                        .filter(Feature.document == docid)
                        .values(Feature.key, Feature.value)]
     
-    def _clear_document(self, document):
+    def _clear_document(self, docid):
         """
         Remove the information that we got from a given Document, given its
         name.
+
+        FIXME: update for lack of TermInDocument
         """
-        query = self.sql_session.query(TermInDocument)\
-                    .filter(TermInDocument.document == document)
-        doc = self.sql_session.query(Document).get(document)
-        for row in query.all():
-            term, document, count = row
+        doc = self.get_document(docid)
+        for term, count in doc.get_terms():
             term_entry = self.sql_session.query(Term).get(term)
-            term_entry.count -= count
+            term_entry.count -= abs(count)
             term_entry.distinct_docs -= 1
-            row.delete()
         any_term = self.sql_session.query(Term).get(ANY)
         any_term.distinct_docs -= 1
         doc.delete()
@@ -378,14 +341,10 @@ class TermDatabase(object):
         Returns the number of times we have seen this term.
         From the cache, if possible.
         """
-        if term in self.term_count_cache:
-            return self.term_count_cache[term]
-        term_entry = self.sql_session.query(Term).get(term)
+        term_entry = self.get_term(term)
         if term_entry:
-            self.term_count_cache[term] = term_entry.count
             return term_entry.count
         else:
-            self.term_count_cache[term] = 0
             return 0
 
     def term_relevance(self, term):
@@ -412,6 +371,13 @@ class TermDatabase(object):
             raise NotImplementedError(
                 "I don't know how to handle trigrams or larger"
             )
+
+    def normalized_relevance(self, term):
+        """
+        Returns the relevance of the term divided by its total frequency.
+        """
+        total_frequency = self.count_term(term)
+        return self.term_relevance(term) / total_frequency if total_frequency else 0.0
     
     def top_terms(self, nterms):
         """
@@ -435,21 +401,20 @@ class TermDatabase(object):
     def count_term_in_document(self, term, document):
         """
         Get the number of times the given term appeared in the given document.
+
+        NOTE: This is inefficient, and we should avoid using it.
         """
-        query = self.sql_session.query(TermInDocument)\
-                  .filter(TermInDocument.term == term)\
-                  .filter(TermInDocument.document == document)
-        try:
-            term_entry = query.one()
-            return term_entry.count
-        except NoResultFound:
-            return 0
+        doc = self.get_document(document)
+        for docterm, value in doc.get_terms():
+            if docterm == term:
+                return value
+        return 0
     
     def count_term_distinct_documents(self, term):
         """
         Get the number of distinct documents a term has appeared in.
         """
-        term_entry = self.sql_session.query(Term).get(term)
+        term_entry = self.get_term(term)
         if term_entry:
             return term_entry.distinct_docs
         else:
@@ -498,7 +463,7 @@ class TermDatabase(object):
         """
         idf = math.log(2 + self.count_term_distinct_documents(ANY))\
             - math.log(1 + self.count_term_distinct_documents(term))
-        return idf        
+        return idf
 
     def tfidf_term_in_document(self, term, document):
         """

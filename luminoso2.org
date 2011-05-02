@@ -5,21 +5,21 @@ have various features for keeping track of things like to-do lists. Orgmode is
 available as a plugin for Emacs, Sublime Text 2 (which I use), and possibly
 for vim.
 
-* Short-term TODOs [4/5]
+* Short-term TODOs [5/5]
   - [X] Figure out why documents are waiting on the disk so much
   - [X] Distribute common-sense matrices with Divisi2
   - [X] Make the language argument optional
   - [X] rename package to luminoso2
-  - [ ] Plan and document the install process for Japanese
+  - [X] Plan and document the install process for Japanese
 
 * Design plans [0/9]
-  - [ ] New "LuminosoModel" that can be incrementally trained [3/6]
+  - [ ] New "LuminosoModel" that can be incrementally trained [4/6]
     - [ ] Figure out {{rough incremental blending}}
     - [X] Look into normalization
     - [X] Test basic association
     - [X] Test tags
     - [ ] Make URLs relative to the model root (not current dir)
-    - [ ] Document
+    - [X] Document
 
   - [ ] LuminosoStudies on top of LuminosoModels [4/7]
     - [X] Discover from filesystem
@@ -54,10 +54,10 @@ for vim.
   
   - [ ] Transitional PyQt interface
 
-  - [ ] HTML/JS interface (job for a UROP?) [0/5]
+  - [ ] HTML/JS interface (job for a UROP?) [1/5]
     - [ ] Some interface for choosing data sources (could be messy!)
     - [ ] Interface for configuration, including choosing a reader
-    - [ ] Ken's visualizer
+    - [X] Ken's visualizer
     - [ ] Report writer
     - [ ] Document
       - [ ] Tutorial
