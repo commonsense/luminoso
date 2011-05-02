@@ -13,13 +13,18 @@ class window.Viewer
     @lastInteraction = null
     @timeout = 3000
     @points = null
-    @colors = null
+    @colors = null; @light_colors = null
     @screenX = null; @screenY = null
 
   init: (data) ->
     @points = data.points
+    @scale = calculateScale(@points)
     @names = data.names
-    @colors = (Math.floor(255*Math.random()) for i in [0...@points.length])
+    @colors = []; @light_colors = []
+    for i in [0...@points.length]
+       vec = @points[i]
+       @colors.push [160+vec[0]*80/@scale, 160+vec[1]*80/@scale, 160+vec[2]*80/@scale]
+       @light_colors.push [200+vec[0]*40/@scale, 200+vec[1]*40/@scale, 200+vec[2]*40/@scale]
     w = @canvas.width; h = @canvas.height
 
     @projection = new Projection(data.ndim, w, h)
@@ -150,9 +155,8 @@ class window.Viewer
       x = screenX[i]; y = screenY[i]
       unless (0 < x < w and 0 < y < h)
         continue
-      cidx = colors[i]
-      color = cmap[cidx]
-      light_color = light_cmap[cidx]
+      color = colors[i]
+      light_color = @light_colors[i]
       offset = 4*(x + w*y);
       arr[offset] = color[0]; arr[offset+1] = color[1]; arr[offset+2] = color[2]; arr[offset+3] = 255;
       arr[offset-4] = light_color[0]; arr[offset-4+1] = light_color[1]; arr[offset-4+2] = light_color[2]; arr[offset-4+3] = 64;
@@ -352,3 +356,12 @@ copyVec = (vec) ->
   for i in [0...vec.length]
     v2[i] = vec[i]
   v2
+
+calculateScale = (points) ->
+  coords = [1.0]
+  for vec in points
+    for entry in vec
+      entry = -entry if entry < 0
+      coords.push(entry) if entry
+  coords.sort()
+  coords[Math.floor(coords.length/2)]
