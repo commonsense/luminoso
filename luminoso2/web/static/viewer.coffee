@@ -1,8 +1,20 @@
-cmap = ([i, 0, 255-i] for i in [0...256])
-MIX = .5
-light_cmap = ([255*MIX + (1-MIX)*i, 0, 255*MIX + (1-MIX)*(255-i)] for i in [0...256])
+# Set up colors
 
-MIN_GRAB_RANGE = 15
+# dark gray to red
+cmap = []; lightCmap = []
+for i in [30...230]
+  cmap.push([i, 30, 30])
+  lightCmap.push([128+i/2, 160, 128])
+
+# red to yellow
+for i in [30...230]
+  cmap.push([230, i, 30])
+  lightCmap.push([255, 128+i/2, 160])
+
+# yellow to white
+for i in [30...230]
+  cmap.push([230, 230, i])
+  lightCmap.push([255, 255, 128+i/2])
 
 class window.Viewer
   constructor: (canvas) ->
@@ -13,18 +25,19 @@ class window.Viewer
     @lastInteraction = null
     @timeout = 3000
     @points = null
-    @colors = null; @light_colors = null
+    @colors = null; @lightColors = null
+    @simColors = null; @lightSimColors = null
     @screenX = null; @screenY = null
 
   init: (data) ->
     @points = data.points
     @scale = calculateScale(@points)
     @names = data.names
-    @colors = []; @light_colors = []
+    @colors = []; @lightColors = []
     for i in [0...@points.length]
        vec = @points[i]
        @colors.push [160+vec[0]*80/@scale, 160+vec[1]*80/@scale, 160+vec[2]*80/@scale]
-       @light_colors.push [200+vec[0]*40/@scale, 200+vec[1]*40/@scale, 200+vec[2]*40/@scale]
+       @lightColors.push [200+vec[0]*40/@scale, 200+vec[1]*40/@scale, 200+vec[2]*40/@scale]
     w = @canvas.width; h = @canvas.height
 
     @projection = new Projection(data.ndim, w, h)
@@ -104,8 +117,7 @@ class window.Viewer
     @mouseButton = e.which
     if @mouseButton == 1
       # Grab the point closest to the mouse pointer
-      @heldIdx = @order[0]
-      console.log('grab', @order[0], ' = ', @names[@order[0]], @distToMouse[@order[0]])
+      @grabPoint(@order[0])
     @lastMouseX = mX; @lastMouseY = mY
     @_interacted()
     false
@@ -124,14 +136,32 @@ class window.Viewer
     @_interacted()
     false
 
+  grabPoint: (idx) ->
+    @heldIdx = idx
+    heldVec = @points[idx]
+    normalizeInPlace(heldVec)
+    sim = (dot(heldVec, vec) / Math.sqrt(dot(vec,vec)+.01) for vec in @points)
+    simIndices = (clip(Math.floor(ent*600+300), 0, 599) for ent in sim)
+    @simColors = (cmap[idx] for idx in simIndices)
+    @lightSimColors = (lightCmap[idx] for idx in simIndices)
+    console.log('grab', idx, ' = ', @names[idx], @distToMouse[idx])
+
+
   tick: ->
     @projection.tick()
 
     # Cache really common references
     project = @projection.makeProjector()
-    points = @points; colors = @colors
+    points = @points
     screenX = @screenX; screenY = @screenY
     w = @imgData.width; h = @imgData.height; arr = @imgData.data
+
+    if @heldIdx?
+      colors = @simColors
+      lightColors = @lightSimColors
+    else
+      colors = @colors
+      lightColors = @lightColors
 
     times = {start: new Date}
 
@@ -156,7 +186,7 @@ class window.Viewer
       unless (0 < x < w and 0 < y < h)
         continue
       color = colors[i]
-      light_color = @light_colors[i]
+      light_color = lightColors[i]
       offset = 4*(x + w*y);
       arr[offset] = color[0]; arr[offset+1] = color[1]; arr[offset+2] = color[2]; arr[offset+3] = 255;
       arr[offset-4] = light_color[0]; arr[offset-4+1] = light_color[1]; arr[offset-4+2] = light_color[2]; arr[offset-4+3] = 64;
@@ -365,3 +395,6 @@ calculateScale = (points) ->
       coords.push(entry) if entry
   coords.sort()
   coords[Math.floor(coords.length/2)]
+
+clip = (x, min, max) ->
+  Math.max(min, Math.min(max, x))
