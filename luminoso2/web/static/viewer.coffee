@@ -43,6 +43,7 @@ class window.Viewer
       .mousedown($.proxy(@onMouseDown, this))
       .mouseup($.proxy(@onMouseUp, this))
       .mousewheel($.proxy(@onMouseWheel, this))
+      .bind 'contextmenu', => false
     null
 
   refresh: ->
