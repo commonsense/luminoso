@@ -43,11 +43,29 @@ To resume working with a model that already exists, run::
 
 Teaching a model
 ----------------
-TODO
+`learn_from` is the main method you will use to teach Luminoso a set of
+documents. It takes two parameters: a URL or path, and a study name.
+
+The first argument, the "URL", can be just a path on your local disk. It 
+can even be relative to the current directory. It should point to a
+source of documents (see :ref:`documents`).
+
+If you provide a study name, it will automatically add all the documents it
+finds to that study.
 
 ::
 
-    >>> model.learn_from_url('path/to/docs/directory', 'study_name')
+    >>> model.learn_from('path/to/docs/directory', 'study_name')
+
+Studies within a model
+----------------------
+Because Luminoso 2 has added the concept of a persistent "model", it is now
+possible to run multiple studies on the same model. Each document you add may
+be associated with a study, so that a study refers to a group of documents
+within the model. By default, documents will be added to the study named "all".
+
+Some operations take in a study name so that you can perform them over a subset
+of documents. For example, when you calculate statistics (see :ref:`statistics`) using :meth:`LuminosoModel.canonical_stats`, you supply the study name that the statistics should be calculated for.
 
 The model API
 -------------
@@ -60,6 +78,3 @@ The model API
              domain_terms_similar_to_vector, docs_similar_to_vector,
              tags_similar_to_vector, learn_assoc, canonical_stats
 
-Studies within a model
-----------------------
-TODO

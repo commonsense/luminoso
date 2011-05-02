@@ -261,7 +261,7 @@ class LuminosoModel(object):
         mse = self.assoc.hebbian_increment(row, col, weight)
         return mse
 
-    def learn_from_url(self, url, study=None, iterations=1):
+    def learn_from(self, url, study=None, iterations=1):
         """
         Given a URL or file path that points to a collection of documents,
         learn from all of those documents. They may also be added to a
@@ -273,8 +273,10 @@ class LuminosoModel(object):
         self.add_from_url(url, study, learn_iterations=iterations)
         self.save_assoc()
         self.save_config()
+    # compatibility with previous docs
+    learn_from_url = learn_from
 
-    def add_from_url(self, url, study=None, learn_iterations=0):
+    def add_from(self, url, study=None, learn_iterations=0):
         """
         Given a URL or file path that points to a collection of documents,
         add all the documents to the database. If `learn_iterations` is 0,
@@ -285,6 +287,7 @@ class LuminosoModel(object):
         batch of documents.
         """
         self.add_batch(lambda: handle_url(url), study, learn_iterations)
+    add_from_url = add_from
 
     def add_batch(self, stream_func, study=None, learn_iterations=0):
         """

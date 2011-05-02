@@ -1,3 +1,5 @@
+.. _statistics:
+
 Canonical documents and statistics
 ==================================
 
