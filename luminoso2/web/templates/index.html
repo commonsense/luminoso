@@ -1,5 +1,26 @@
 <!doctype html>
+<html>
+<head>
 <script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.5.2/jquery.min.js"></script>
+<script type="text/javascript" src="static/jquery.mousewheel.js"></script>
+<script type="text/javascript">
+// requestAnimationFrame shim (http://paulirish.com/2011/requestanimationframe-for-smart-animating/)
+window.requestAnimFrame = (function(){
+      return  window.requestAnimationFrame       || 
+              window.webkitRequestAnimationFrame || 
+              window.mozRequestAnimationFrame    || 
+              window.oRequestAnimationFrame      || 
+              window.msRequestAnimationFrame     || 
+              function(/* function */ callback, /* DOMElement */ element){
+                window.setTimeout(callback, 1000 / 60);
+              };
+    })();
+</script>
+<script type="text/javascript" src="static/readBin.js"></script>
+<script type="text/javascript" src="static/viewer.js"></script>
+<script type="text/javascript">
+</script>
+
 <script src="http://cdn.socket.io/stable/socket.io.js"></script>
 <script type="text/javascript">
 var socket;
@@ -27,8 +48,19 @@ $(function() {
       $("<option>").text(url).appendTo(docs);
     });
   });
+
+  window.viewer = new Viewer(document.getElementById("canvas"))
+  window.viewer.setData('/viewer/all/coords', '/viewer/all/names')
 });
 </script>
+</head>
+
+<body>
+<canvas id="canvas" width="800" height="800" style="border: 1px inset #333"></canvas>
+
 <select id="docs" size=10></select>
 Contents:
 <div id="contents"></div>
+
+</body>
+</html>
