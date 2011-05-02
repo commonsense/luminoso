@@ -100,15 +100,15 @@ def genmatrix(list, combinfunc, symmetric=False, diagonal=None):
       for item2 in list:
          if diagonal is not None and col_index == row_index:
             # if this is a cell on the diagonal
-            row.append(diagonal)
+            row.extend([diagonal])
          elif symmetric and col_index < row_index:
             # if the matrix is symmetric and we are "in the lower left triangle"
-            row.append( matrix[col_index][row_index] )
+            row.extend( [matrix[col_index][row_index]] )
          else:
             # if this cell is not on the diagonal
-            row.append(combinfunc(item, item2))
+            row.extend([combinfunc(item, item2)])
          col_index += 1
-      matrix.append(row)
+      matrix.extend([row])
       row_index += 1
    return matrix
 
@@ -152,7 +152,7 @@ def centroid(list, method=median):
    "returns the central vector of a list of vectors"
    out = []
    for i in range(len(list[0])):
-      out.append( method( [x[i] for x in list] ) )
+      out.extend( [method( [x[i] for x in list] )] )
    return tuple(out)
 
 class Cluster:
@@ -187,14 +187,14 @@ class Cluster:
       if len(args) == 0: self.__items = []
       else:              self.__items = list(args)
 
-   def append(self, item):
+   def extend(self, item):
       """
       Appends a new item to the cluster
 
       PARAMETERS
          item  -  The item that is to be appended
       """
-      self.__items.append(item)
+      self.__items.extend([item])
 
    def items(self, newItems = None):
       """
@@ -225,7 +225,7 @@ class Cluster:
          if isinstance(item, Cluster):
             flattened_items = flattened_items + self.fullyflatten(item)
          else:
-            flattened_items.append(item)
+            flattened_items.extend([item])
 
       return flattened_items
 
@@ -452,7 +452,7 @@ class HierarchicalClustering(BaseClusterMethod):
       distances = []
       for k in x:
          for l in y:
-            distances.append(self.distance(k,l))
+            distances.extend([self.distance(k,l)])
       return median(distances)
 
    def averageLinkageDistance(self, x, y):
@@ -476,7 +476,7 @@ class HierarchicalClustering(BaseClusterMethod):
       distances = []
       for k in x:
          for l in y:
-            distances.append(self.distance(k,l))
+            distances.extend([self.distance(k,l)])
       return mean(distances)
 
    def completeLinkageDistance(self, x, y):
@@ -584,7 +584,7 @@ class HierarchicalClustering(BaseClusterMethod):
          # approach clarifies that
          self._data.remove(self._data[max(smallestpair[0], smallestpair[1])]) # remove item 1
          self._data.remove(self._data[min(smallestpair[0], smallestpair[1])]) # remove item 2
-         self._data.append(cluster)               # append item 1 and 2 combined
+         self._data.extend([cluster])               # append item 1 and 2 combined
 
       # all the data is in one single cluster. We return that and stop
       self.__clusterCreated = True
@@ -679,7 +679,12 @@ available. You supplied %d items, and asked for %d clusters.""" %
       items_moved = True     # tells us if any item moved between the clusters,
                              # as we initialised the clusters, we assume that
                              # is the case
+
+      count = 1
       while items_moved is True:
+##      while count < 10:
+         print count
+         count+=1
          items_moved = False
          for cluster in self.__clusters:
             for item in cluster:
@@ -716,7 +721,7 @@ available. You supplied %d items, and asked for %d clusters.""" %
          origin      - the originating cluster
          destination - the target cluster
       """
-      destination.append( origin.pop( origin.index(item) ) )
+      destination.extend( [origin.pop( origin.index(item) )] )
 
    def initialiseClusters(self, input, clustercount):
       """
@@ -729,11 +734,11 @@ available. You supplied %d items, and asked for %d clusters.""" %
       """
       # initialise the clusters with empty lists
       self.__clusters = []
-      for x in xrange(clustercount): self.__clusters.append([])
+      for x in xrange(clustercount): self.__clusters.extend([ [] ])
 
       # distribute the items into the clusters
       count = 0
       for item in input:
-         self.__clusters[ count % clustercount ].append(item)
+         self.__clusters[ count % clustercount ].extend([item])
          count += 1
 
