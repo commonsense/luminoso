@@ -384,6 +384,7 @@ class TermDatabase(object):
         Get the `nterms` most relevant terms.
         """
         return self.sql_session.query(Term)\
+                   .filter(Term.term != '*')\
                    .order_by(desc(Term.relevance))[:nterms]
     
     def _update_term_relevance(self, term):
