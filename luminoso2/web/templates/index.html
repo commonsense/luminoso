@@ -18,9 +18,12 @@ window.requestAnimFrame = (function(){
 </script>
 <script type="text/javascript" src="static/readBin.js"></script>
 <script type="text/javascript" src="static/viewer.js"></script>
-<script type="text/javascript">
-</script>
-
+<style type="text/css">
+h1 { margin: 0; }
+#docs { float: left; width: 250px; }
+#canvas { }
+#contents { margin-left: 250px; width: 800px; whitespace: pre-wrap; }
+</style>
 <script src="http://cdn.socket.io/stable/socket.io.js"></script>
 <script type="text/javascript">
 var socket;
@@ -56,10 +59,9 @@ $(function() {
 </head>
 
 <body>
-<canvas id="canvas" width="800" height="800" style="border: 1px inset #333"></canvas>
-
+<h1>Luminoso</h1>
 <select id="docs" size=10></select>
-Contents:
+<canvas id="canvas" width="800" height="600" style="border: 1px inset #333"></canvas>
 <div id="contents"></div>
 
 </body>
