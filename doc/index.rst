@@ -13,6 +13,7 @@ Contents:
     
    install
    model
+   documents
    canonical
    luminoso1
 
