@@ -9,6 +9,7 @@ The job of `handle_url` is to dispatch to the appropriate function.
 import chardet
 import os
 import sys
+import random
 try:
     import json
 except ImportError:
@@ -128,27 +129,35 @@ def handle_json_obj(obj, url, name=None):
     else:
         LOG.warn("could not find a valid document in %r#%r" % (url, name))
 
-def handle_directory(dirname):
+def handle_directory(dirname, sample_frac=1.0):
     """
     Handle a directory and get a stream of documents out of it.
+
+    See handle_url for documentation of sample_frac.
     """
     if not isinstance(dirname, unicode):
         # Ensure that paths are unicode.
         dirname = dirname.decode(sys.getfilesystemencoding())
     for filename in os.listdir(dirname):
-        if not filename.startswith(u'.'):
+        if (not filename.startswith(u'.') and
+            (sample_frac >= 1.0 or random.random() < sample_frac)):
             for result in handle_url(dirname+os.sep+filename):
                 yield result
 
-def handle_url(url, name=None):
+def handle_url(url, name=None, sample_frac=1.0):
     """
     Handle a file specified by its URL (by default, a local file).
+
+    If `sample_frac` is given, it gives the fraction of documents to
+    consider. Whether to keep a particular document is chosen by a
+    flip (Beta distribution) with this parameter, so the actual number
+    of documents used will follow Binomial(num_docs, sample_frac).
 
     TODO: handle schemas that aren't local files.
     """
     if os.access(url, os.F_OK):
         if os.path.isdir(url): # it's a directory
-            for result in handle_directory(url):
+            for result in handle_directory(url, sample_frac=sample_frac):
                 yield result
         elif url.endswith(u'.json') or url.endswith(u'.js'):
             for result in handle_json_file(url, name):
