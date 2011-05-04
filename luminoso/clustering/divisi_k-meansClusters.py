@@ -1,6 +1,8 @@
 from csc import divisi2
+from divisi2 import examples
 import random
 import os
+import numpy as np
 
 def create_file(name, stored_values):
         '''
@@ -27,7 +29,7 @@ def randomClustersMatrix(terms, k):
         termsDict[terms[i]] = [None, None]
         # create cluster for term and place 1 in assigned cluster
         cluster = [0.0]*k
-        cluster[r] = 1.0
+        cluster[random.randrange(0, k)] = 1.0
         # add cluster to cluster list 'clusters'
         clusters.extend([cluster])
     # Name the k clusters
@@ -61,24 +63,25 @@ def normalize(matrix, dict, cluster_names, term_names):
     sums = []
     terms = float(len(term_names))
     for j in cluster_names:
-        sums.append(sum(matrix.col_named(j))/terms)
+        sums.append(np.sum(np.asarray(matrix.col_named(j))) + 1)
     v = divisi2.DenseVector(sums, cluster_names)
     # Normalize by multiplying each row with vector v.
     for i in range(len(matrix)):
-        matrix[i] = matrix[i]*v
+        matrix[i] = matrix[i]/v
     # Copy results to a .txt file.
     create_file('cluster_assignment', dict.values())
         
 def createSpectralMatrix(k):
     # proj is a ReconstructedMatrix of the form terms:terms.
-    proj = divisi2.load(os.path.abspath('..\\..\\ThaiFoodStudy')+'\\Results\\spectral.rmat')
+    proj = divisi2.load(os.path.abspath('../../ThaiFoodStudy')+'/Results/spectral.rmat')
+    #proj = examples.spreading_activation()
 
     # create sparse matrix for clusters of the form terms:clusters (row, col).
-    clusterMatrix, cluster_names, term_names, termsDict = randomClustersMatrix(proj.col_labels, k)
+    clusterMatrix, cluster_names, term_names, termsDict = randomClustersMatrix(proj.row_labels, k)
     count = 0
-
     while True:
         count += 1
+        print count
         clusterMatrix = divisi2.aligned_matrix_multiply(proj.left, divisi2.aligned_matrix_multiply(proj.right,clusterMatrix))
         repeat = normalize(clusterMatrix, termsDict, cluster_names, term_names)
         if repeat:
