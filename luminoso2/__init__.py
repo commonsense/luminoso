@@ -8,6 +8,9 @@ logging.basicConfig(stream=sys.stdout, level=logging.INFO)
 
 # suppress warnings internal to PyLint
 warnings.simplefilter("ignore")
+
+# Import commonly used methods.
+make_common_sense = LuminosoModel.make_common_sense
 make_english = LuminosoModel.make_english
 make_japanese = LuminosoModel.make_japanese
 make_empty = LuminosoModel.make_empty

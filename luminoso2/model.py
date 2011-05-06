@@ -286,7 +286,7 @@ class LuminosoModel(object):
         This is the main loop that one should use to train a model with a
         batch of documents.
         """
-        stream = handle_url(url)
+        stream = handle_url(url, sample_frac=self.config.get('sample_frac', 1.0))
         batch = []
         while True:
             if len(batch) == batch_size:
@@ -350,6 +350,7 @@ class LuminosoModel(object):
                     avg_err = (.999 * avg_err) + (.001 * err)
         
         # Finally, update the full texts of the terms we saw.
+        LOG.info("Updating full texts")
         for term, fulltext in fulltext_cache.items():
             self.database.set_term_text(term, fulltext)
         self.database.commit()
@@ -705,6 +706,7 @@ def _default_config():
     config['num_axes'] = 100
     config['reader'] = 'simplenlp.en'
     config['iteration'] = 0
+    config['sample_frac'] = 1.0
     return config
 
 def _prioritize_labels(mat, num_concepts):
