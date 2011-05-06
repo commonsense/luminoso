@@ -8,9 +8,9 @@ logger = logging.getLogger('luminoso2.svdupdate')
 
 def svdUpdate(U, S, V, a, b):
     """
-    Update SVD of an (m x n) matrix `X = U * S * V^T` so that
+    Update SVD of an (m x n) matrix `X = U * diag(S) * V^T` so that
     `[X + a * b^T] = U' * S' * V'^T`
-    and return `U'`, `S'`, `V'`.
+    and return `U'`, `diag(S')`, `V'`.
     
     The original matrix X is not needed at all, so this function implements one-pass
     streaming rank-1 updates to an existing decomposition.
@@ -25,14 +25,14 @@ def svdUpdate(U, S, V, a, b):
     but without separating the basis from rotations.
     """
     # convert input to matrices (no copies of data made if already numpy.ndarray or numpy.matrix)
-    S = numpy.asmatrix(S)
+    S = numpy.asarray(S).ravel()
     U = numpy.asmatrix(U)
     if V is not None:
         V = numpy.asmatrix(V)
     a = numpy.asmatrix(a).reshape(a.size, 1)
     b = numpy.asmatrix(b).reshape(b.size, 1)
 
-    rank = S.shape[0]
+    rank = len(S)
 
     # eq (6)
     m = U.T * a
@@ -61,16 +61,17 @@ def svdUpdate(U, S, V, a, b):
                       % (float(Ra), float(Rb)))
 
     # eq (8)
-    K = numpy.matrix(numpy.diag(list(numpy.diag(S)) + [0.0])) + numpy.bmat('m ; Ra') * numpy.bmat('n ; Rb').T
+    S = numpy.r_[S, 0.0]
+    K = numpy.matrix(numpy.diag(S)) + numpy.r_[m, Ra] * numpy.r_[n, Rb].T
 
     # eq (5)
     u, s, vt = numpy.linalg.svd(K, full_matrices = False)
     tUp = numpy.matrix(u[:, :rank])
     tVp = numpy.matrix(vt.T[:, :rank])
-    tSp = numpy.matrix(numpy.diag(s[: rank]))
-    Up = numpy.bmat('U P') * tUp
+    tSp = s[: rank]
+    Up = numpy.c_[U, P] * tUp
     if V is not None:
-        Vp = numpy.bmat('V Q') * tVp
+        Vp = numpy.c_[V, Q] * tVp
     else:
         Vp = None
     Sp = tSp
