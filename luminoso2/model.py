@@ -15,7 +15,7 @@ import divisi2
 import numpy as np
 from divisi2.fileIO import load_pickle, save_pickle
 from divisi2.ordered_set import PrioritySet
-from luminoso2.svdupdate import svdUpdate
+from luminoso2.svdupdate import general_svd_update
 from luminoso2.term_database import TermDatabase, _BIG
 from luminoso2.text_readers import get_reader, DOCUMENT, TAG
 from luminoso2.document_handlers import handle_url
@@ -47,6 +47,7 @@ class LuminosoModel(object):
     CONFIG_FILENAME = 'luminoso.cfg'
     DATA_FILENAME = 'data.pkl'
     DB_FILENAME = 'terms.sqlite'
+    _update_k = 100
 
     def __init__(self, model_dir, model_data=None):
         """
@@ -223,7 +224,7 @@ class LuminosoModel(object):
                 norm_factor = ((self.database.count_term(term1) + 1)
                                * (self.database.count_term(term2) + 1)) ** .5
                 yield weight/norm_factor, term1, term2
-    
+
     def index_term(self, term, priority=None):
         """
         Ensure that a term is in both the database and the PrioritySet.
@@ -244,28 +245,24 @@ class LuminosoModel(object):
             self.idf_cache[term] = idf
             return idf
 
-    def learn_from(self, url, study=None, iterations=1, batch_size=1000):
+    def learn_from(self, url, study=None, batch_size=1000):
         """
         Given a URL or file path that points to a collection of documents,
         learn from all of those documents. They may also be added to a
         study at the same time.
-
-        Default to 1 iteration, because on a reasonable amount of data that
-        will be all you need.
         """
-        self.add_from_url(url, study, learn_iterations=iterations,
-                          batch_size=batch_size)
+        self.add_from_url(url, study, learn=True, batch_size=batch_size)
         self.save_data()
         self.save_config()
     # compatibility with previous docs
     learn_from_url = learn_from
 
-    def add_from(self, url, study=None, learn_iterations=0, batch_size=1000):
+    def add_from(self, url, study=None, learn=False, batch_size=1000):
         """
-        Given a URL or file path that points to a collection of documents,
-        add all the documents to the database. If `learn_iterations` is 0,
-        the concept model will not change. When greater than 0, this 
-        implements `learn_from_url`.
+        Given a URL or file path that points to a collection of
+        documents, add all the documents to the database. If `learn`
+        is False, the concept model will not change; otherwise, this
+        implements `learn_from`.
 
         This is the main loop that one should use to train a model with a
         batch of documents.
@@ -274,17 +271,17 @@ class LuminosoModel(object):
         batch = []
         while True:
             if len(batch) == batch_size:
-                self.add_batch(lambda: iter(batch), study, learn_iterations)
+                self.add_batch(batch, study, learn=learn)
                 batch[:] = []
             try:
                 batch.append(next(stream))
             except StopIteration:
-                self.add_batch(lambda: iter(batch), study, learn_iterations)
+                self.add_batch(batch, study, learn=learn)
                 batch[:] = []
                 break
     add_from_url = add_from
 
-    def add_batch(self, stream_func, study=None, learn_iterations=0):
+    def add_batch(self, batch, study=None, learn=False):
         """
         Add a batch of documents from some source, a `stream_func` that
         when called returns an iterator over the documents.
@@ -293,83 +290,70 @@ class LuminosoModel(object):
 
         # First pass: add documents to the term database, and meanwhile
         # collect full texts and tags.
-        for doc in stream_func():
+        for doc in batch:
             docid = self.add_document(doc)
             reader = get_reader(doc['reader'])
             for term, fulltext in reader.extract_term_texts(doc['text']):
                 fulltext_cache[term] = fulltext
             if study is not None:
                 self.database.set_tag_on_document(docid, 'study', study)
-        
+
         LOG.info("Committing documents to the database")
         self.database.commit()
 
         LOG.info("Collecting relevant terms")
         self.database.update_relevance()
 
-        if learn_iterations:
+        if learn:
             # Second pass (optional): update the projection based on
             # the word associations we discover.
-            #
-            # We do this by doing a series of rank-1 analytical
-            # updates to the term association matrix.
-            nterms = self.u.shape[0]
-            updates = (update
-                       for doc in stream_func()
-                       for update in self.document_assoc_updates(doc['url']))
-            while True:
-                # Construct an update of the form X += a b^T. To
-                # reduce bookkeeping, we require that at most one
-                # nonzero entry be in any row or column. But we do
-                # accumulate multiple updates to the same term pair
-                # into the same batch.
-                a = np.zeros(nterms)
-                b = np.zeros(nterms)
-                todo = []
-                num_done = 0
-                for weight, term1, term2 in updates:
-                    num_done += 1
+
+            # Compute the SVD of this set of updates.
+            nterms, k = self.u.shape
+            values, rows, cols = [], [], []
+            for doc in batch:
+                for weight, term1, term2 in self.document_assoc_updates(doc['url']):
                     try:
                         row = self.priority.index(term1)
                         col = self.priority.index(term2)
                     except KeyError:
                         # Terms fell out of the priorityset.
                         continue
-                    if a[row] == 0 and b[col] == 0:
-                        # new pair
-                        a[row] = weight
-                        b[col] = 1.0
-                    elif a[row] != 0 and b[col] == 1.0:
-                        # same term pair already accumulating
-                        a[row] += weight
-                    else:
-                        # Oops, do it next time.
-                        todo.append((weight, term1, term2))
-                        num_done -= 1
+                    values.append(weight)
+                    rows.append(row)
+                    cols.append(col)
+            LOG.info('Analyzing new associations...')
+            update_matrix = divisi2.SparseMatrix.from_lists(values, rows, cols,
+                                                            nrows=nterms,
+                                                            ncols=nterms)
+            update_u, update_s, update_v = update_matrix.svd(k=self._update_k)
 
-                # Apply the update
-                LOG.info('Applying %d SVD updates, %d to go', num_done, len(todo))
-                Up, Sp, _ = svdUpdate(self.u, self.sigma, None, a, b)
+            # Strip to bare NumPy
+            U = np.asarray(self.u)
+            A = np.multiply(np.asarray(update_u), np.asarray(update_s))
+            B = np.asarray(update_v)
 
-                # Do it again?
-                if todo:
-                    updates = todo
-                else:
-                    break
-        
+            # Apply SVD update.
+            LOG.info('Updating projection with new associations...')
+            new_u, new_sigma, _ = general_svd_update(U, self.sigma, U, A, B, k)
+
+            # Update the stored model.
+            self.u = divisi2.DenseMatrix(new_u, self.priority, None)
+            self.sigma = new_sigma
+
         # Finally, update the full texts of the terms we saw.
         LOG.info("Updating full texts")
         for term, fulltext in fulltext_cache.items():
             self.database.set_term_text(term, fulltext)
         self.database.commit()
-        
+
         # If this was a study, make a document matrix for it.
         if study is not None:
             LOG.info("Making document matrix for %r" % study)
             self.update_doc_matrix(study)
         LOG.info("Updating tag matrix")
         self.update_tag_matrix()
-    
+
     def docs_in_study(self, study_name='all'):
         """
         Get a list of all documents in the given study.

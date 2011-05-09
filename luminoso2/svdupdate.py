@@ -1,79 +1,54 @@
-# This code is taken from
-# https://github.com/piskvorky/gensim/blob/develop/src/gensim/models/lsimodel.py#L499
-# License: LGPL
-
-import numpy
+import numpy as np
+import numpy.linalg as LA
 import logging
 logger = logging.getLogger('luminoso2.svdupdate')
 
-def svdUpdate(U, S, V, a, b):
-    """
-    Update SVD of an (m x n) matrix `X = U * diag(S) * V^T` so that
-    `[X + a * b^T] = U' * S' * V'^T`
-    and return `U'`, `diag(S')`, `V'`.
-    
-    The original matrix X is not needed at all, so this function implements one-pass
-    streaming rank-1 updates to an existing decomposition.
-    
-    `a` and `b` are (m, 1) and (n, 1) matrices.
-    
-    You can set V to None if you're not interested in the right singular
-    vectors. In that case, the returned V' will also be None (saves memory).
-    
-    This is the rank-1 update as described in
-    **Brand, 2006: Fast low-rank modifications of the thin singular value decomposition**,
-    but without separating the basis from rotations.
-    """
-    # convert input to matrices (no copies of data made if already numpy.ndarray or numpy.matrix)
-    S = numpy.asarray(S).ravel()
-    U = numpy.asmatrix(U)
-    if V is not None:
-        V = numpy.asmatrix(V)
-    a = numpy.asmatrix(a).reshape(a.size, 1)
-    b = numpy.asmatrix(b).reshape(b.size, 1)
+def general_svd_update(U, S, V, A, B, rank, eps=1e-10):
+    '''
+    Given the SVD X=USV^T, finds an updated decomposition X+AB^T = Up
+    Sp Vp^T. The result is trimmed to the specified rank.
 
-    rank = len(S)
+    S, a diagonal matrix, is represented by its diagonal elements.
 
-    # eq (6)
-    m = U.T * a
-    p = a - U * m
-    Ra = numpy.sqrt(p.T * p)
-    if float(Ra) < 1e-10:
-        logger.debug("input already contained in a subspace of U; skipping update")
-        return U, S, V
-    P = (1.0 / float(Ra)) * p
+    Returns: Up, Sp, Vp.
 
-    if V is not None:
-        # eq (7)
-        n = V.T * b
-        q = b - V * n
-        Rb = numpy.sqrt(q.T * q)
-        if float(Rb) < 1e-10:
-            logger.debug("input already contained in a subspace of V; skipping update")
-            return U, S, V
-        Q = (1.0 / float(Rb)) * q
-    else:
-        n = numpy.matrix(numpy.zeros((rank, 1)))
-        Rb = numpy.matrix([[1.0]])
+    The approach follows Brand 2006 (MERL TR2006-059).
 
-    if float(Ra) > 1.0 or float(Rb) > 1.0:
-        logger.debug("insufficient target rank (Ra=%.3f, Rb=%.3f); this update will result in major loss of information"
-                      % (float(Ra), float(Rb)))
+    Note that all the matrices involved should be plain NumPy arrays, not subclasses.
+    '''
 
-    # eq (8)
-    S = numpy.r_[S, 0.0]
-    K = numpy.matrix(numpy.diag(S)) + numpy.r_[m, Ra] * numpy.r_[n, Rb].T
+    # Let P be an orthogonal basis of the column-space of
+    # (I-UU^T)A--the component of A that is orthogonal to U, and set
+    # Ra = P^T(I-UU^T)A
+    M = np.dot(U.T, A) # roughly: component of A in direction of U
+    Pp = A - np.dot(U, M) # component of A orthogonal to U
+    P, Ra = LA.qr(Pp) # Finds Pp=P*Ra, where P is orthonormal and Ra upper triangular
 
-    # eq (5)
-    u, s, vt = numpy.linalg.svd(K, full_matrices = False)
-    tUp = numpy.matrix(u[:, :rank])
-    tVp = numpy.matrix(vt.T[:, :rank])
-    tSp = s[: rank]
-    Up = numpy.c_[U, P] * tUp
-    if V is not None:
-        Vp = numpy.c_[V, Q] * tVp
-    else:
-        Vp = None
-    Sp = tSp
+    # # Truncate Ra to only the non-negligible values.
+    # mag = np.sum(Ra, axis=1)
+    # cutoff = np.min(np.nonzero(mag < S[0]*eps)[0])
+    # assert np.all(mag[cutoff:] < S[0]*eps)
+    # Ra = P[:,:cutoff]
 
-    return Up, Sp, Vp
+    # Similarly, let QRb=(I-VV^T)B.
+    N = np.dot(V.T, B)
+    Qq = B - np.dot(V, N)
+    Q, Rb = LA.qr(Qq)
+
+    # Here is the main equation (4)
+    K = np.dot(np.r_[M, Ra], np.r_[N, Rb].T)
+    for i in xrange(len(S)):
+        K[i,i] += S[i]
+
+    # Now diagonalize K.
+    Uu, Ss, Vv = LA.svd(K, full_matrices=False)
+
+    # Construct the new SVD.
+    Up = np.dot(np.c_[U, P], Uu)
+    Sp = Ss
+    Vp = np.dot(np.c_[V, Q], Vv)
+
+    return trim_svd(Up, Sp, Vp, rank)
+
+def trim_svd(U, s, V, rank):
+    return U[:,:rank], s[:rank], V[:,:rank]
