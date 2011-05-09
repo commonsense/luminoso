@@ -444,6 +444,12 @@ class LuminosoModel(object):
         mat = term_mat.concatenate(self.get_doc_matrix(study_name))
         write_packed(mat, self.filename_in_dir(study_name), denormalize)
 
+    def spectrally_associate(self, vec):
+        """
+        Multiply vec by e^(sqrt(S)/2).
+        """
+        return vec.multiply(np.exp(np.sqrt(self.sigma)/2))
+
     def vector_from_terms(self, terms):
         """
         Get a category vector representing the given set of weighted terms,
@@ -462,9 +468,8 @@ class LuminosoModel(object):
                 index = self.priority.index(term)
                 tfidf_weight = weight * self.get_term_idf(term) * self.database.normalized_relevance(term)
                 vec[index] = tfidf_weight / total_weight
-        # TODO: spectral assoc.
         category = divisi2.dot(vec, self.u)
-        return category
+        return self.spectrally_associate(category)
 
     def vector_from_text(self, text, reader_name=None):
         """
@@ -503,7 +508,7 @@ class LuminosoModel(object):
         associated terms. You can run the `top_items()` method of this vector
         to get the most associated terms.
         """
-        return divisi2.dot(self.u, vec)
+        return divisi2.dot(self.spectrally_associate(self.u), vec)
     
     def domain_terms_similar_to_vector(self, vec):
         """
@@ -520,7 +525,7 @@ class LuminosoModel(object):
             if (self.priority.priority.has_key(i) and
                 self.priority.priority[i] < 1e6):
                 mask[i] = True
-        return divisi2.multiply(divisi2.dot(self.u, vec), mask)
+        return divisi2.multiply(self.terms_similar_to_vector(vec), mask)
     
     def docs_similar_to_vector(self, vec, study='all'):
         """
