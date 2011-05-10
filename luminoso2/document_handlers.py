@@ -11,6 +11,8 @@ import os
 import sys
 import random
 import urllib2
+import htmlentitydefs
+from BeautifulSoup import BeautifulSoup, NavigableString, Tag
 import re
 try:
     import json
@@ -29,6 +31,33 @@ def ensure_unicode(text):
         return text.decode('utf-8', 'replace')
     else:
         return unicode(text)
+
+def unescape_html(text):
+    """
+    Decode all three types of HTML entities/character references.
+
+    Code by Fredrik Lundh of effbot.org.
+    """
+    def fixup(m):
+        text = m.group(0)
+        if text[:2] == "&#":
+            # character reference
+            try:
+                if text[:3] == "&#x":
+                    return unichr(int(text[3:-1], 16))
+                else:
+                    return unichr(int(text[2:-1]))
+            except ValueError:
+                pass
+        else:
+            # named entity
+            try:
+                text = unichr(htmlentitydefs.name2codepoint[text[1:-1]])
+            except KeyError:
+                pass
+        return text # leave as is
+    return re.sub("&#?\w+;", fixup, text)
+
 
 def get_file_text(filename):
     """
@@ -153,39 +182,42 @@ def handle_directory(dirname, sample_frac=1.0):
             for result in handle_url(dirname+os.sep+filename):
                 yield result
 
-SPOOF_HEADERS = {'User-Agent': "Mozilla/5.0 (X11; Linux x86_64; rv:2.0.1) Gecko/20100101 Firefox/4.0.1"}
-HEADERS = {'User-Agent': "Luminoso/2.0 (http://lumino.so)"}
-
-def handle_html(data, url=None, name=None):
-    raise NotImplementedError
-
-def handle_wiki(data, url, name):
+def handle_html(data, url, name):
     """
-    Handle raw wiki text, stripping out most markup.
+    Extract plain text from paragraphs in an HTML page. Particularly designed
+    for MediaWiki pages, but will probably work on many other pages.
 
-    Credit/blame for this code goes to Dennis Clark.
+    It reads headings and paragraphs, and a few inoffensive tags within them.
+    It does not read lists or tables.
     """
-    def remove_wiki_tags(string):
-        p = re.compile(r'<.*?>')
-        r = re.compile('\{\{[^\{]*?\}\}',re.DOTALL)
-        s = re.compile('&lt;.*?&gt;')
-        t = re.compile('\[\[[^\]]*?\|')
-        u = re.compile('&quot;|&amp;|\]\]|\[\[|mdash;|===|==')
-        v = re.compile('Notes.*|References.*',re.DOTALL)
-        w = re.compile('\[http.*?\]')        
-        return w.sub('',v.sub('',u.sub('',t.sub(' ',s.sub(' ',r.sub(' ',r.sub(' ',p.sub(' ', string))))))))
-
+    soup = BeautifulSoup(data)
+    paragraphs = soup.findAll(['title', 'p', 'h1', 'h2', 'h3', 'h4'])
+    segments = []
+    for paragraph in paragraphs:
+        for item in paragraph.contents:
+            if isinstance(item, NavigableString):
+                segments.append(item)
+            elif isinstance(item, Tag):
+                if item.name in ('a', 'b', 'i', 'span'):
+                    if item.string:
+                        segments.append(item.string)
+        segments.append('//\n')
     yield {
-        'text': remove_wiki_tags(data),
-        'url': url.split('?')[0],
+        'text': unescape_html(' '.join(segments)),
+        'url': url,
         'name': name
     }
+
+SPOOF_HEADERS = {'User-Agent': "Mozilla/5.0 (X11; Linux x86_64; rv:2.0.1) Gecko/20100101 Firefox/4.0.1"}
+HEADERS = {'User-Agent': "Luminoso/2.0 (http://lumino.so)"}
 
 def handle_remote_url(url, name=None):
     """
     Handle a URL that indicates the file should be retrieved over the Internet.
 
-    TODO: better content type detection.
+    TODO: better content type detection. There are principled ways to tell
+    whether a document contains HTML, JSON, or something else. The server
+    might even tell us. It might even be correct.
     """
     req = urllib2.Request(url, headers=HEADERS)
     try:
@@ -196,10 +228,7 @@ def handle_remote_url(url, name=None):
             json_obj = json.loads(data)
             for result in handle_json_obj(json_obj, url, name):
                 yield result
-        elif url.endswith('?format=raw'):
-            for result in handle_wiki(data, url, name):
-                yield result
-        elif url.endswith('.html') or url.endswith('.htm') or '<html>' in data[:1000] or '<HTML>' in data[:1000]:
+        elif url.endswith('.html') or url.endswith('.htm') or '<html' in data[:1000] or '<HTML' in data[:1000]:
             for result in handle_html(data, url, name):
                 yield result
         else:
