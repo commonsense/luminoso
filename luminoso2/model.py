@@ -306,6 +306,7 @@ class LuminosoModel(object):
         when called returns an iterator over the documents.
         """
         fulltext_cache = {}
+        self.connections_cache = {}
 
         # First pass: add documents to the term database, and meanwhile
         # collect full texts and tags.
@@ -459,7 +460,7 @@ class LuminosoModel(object):
         """
         total_weight = 0.0
         for _, weight in terms:
-            total_weight += weight
+            total_weight += abs(weight)
 
         vec = divisi2.DenseVector(
             np.zeros((len(self.priority),)),
