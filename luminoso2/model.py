@@ -457,7 +457,7 @@ class LuminosoModel(object):
         """
         total_weight = 0.0
         for _, weight in terms:
-            total_weight += weight
+            total_weight += abs(weight)
 
         vec = divisi2.DenseVector(
             np.zeros((len(self.priority),)),
