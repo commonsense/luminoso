@@ -287,6 +287,7 @@ class LuminosoModel(object):
         when called returns an iterator over the documents.
         """
         fulltext_cache = {}
+        self.connections_cache = {}
 
         # First pass: add documents to the term database, and meanwhile
         # collect full texts and tags.
@@ -533,7 +534,7 @@ class LuminosoModel(object):
         associated documents in the study. You can run the `top_items()`
         method of this vector to get the most associated documents.
         """
-        return divisi2.dot(self.get_doc_matrix(study).normalize_rows(offset=0.1), vec)
+        return divisi2.dot(self.get_doc_matrix(study).normalize_rows(offset=1.0), vec)
 
     def tags_similar_to_vector(self, vec):
         """
@@ -541,7 +542,7 @@ class LuminosoModel(object):
         associated tags in the study. You can run the `top_items()`
         method of this vector to get the most associated tags.
         """
-        return divisi2.dot(self.get_tag_matrix().normalize_rows(offset=0.1), vec)
+        return divisi2.dot(self.get_tag_matrix().normalize_rows(offset=1.0), vec)
     
     def show_sim(self, similarities, n=10):
         """

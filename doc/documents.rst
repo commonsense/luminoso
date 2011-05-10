@@ -64,6 +64,7 @@ encoding incorrectly, please report it to us as a bug.
 The document handler API
 ````````````````````````
 .. automodule:: luminoso2.document_handlers
+    :members:
 
 .. _readers:
 
@@ -84,8 +85,8 @@ The two readers we currently support are:
 
 The text reader API
 ```````````````````
-.. automodule:: luminoso2.document_handlers
-
+.. automodule:: luminoso2.text_readers
+    :members:
 
 Associations
 ------------

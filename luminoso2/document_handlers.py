@@ -10,6 +10,8 @@ import chardet
 import os
 import sys
 import random
+import urllib2
+import re
 try:
     import json
 except ImportError:
@@ -87,6 +89,12 @@ def handle_json_file(filename, name=None):
     for result in handle_json_obj(obj, filename, name):
         yield result
 
+def relative_url(baseurl, url):
+    if '//' in url or url.startswith('/'):
+        return url
+    else:
+        return baseurl + os.path.sep + url
+
 def handle_json_obj(obj, url, name=None):
     """
     Handle a JSON object, which is either a document itself or may contain
@@ -117,7 +125,8 @@ def handle_json_obj(obj, url, name=None):
             obj.setdefault(u'name', name)
             yield obj
         elif u'url' in obj:
-            for result in handle_url(baseurl + os.path.sep + obj[u'url'],
+            newurl = relative_url(baseurl, obj[u'url'])
+            for result in handle_url(newurl,
                                      obj.get(u'name', name)):
                 yield result
         else:
@@ -144,6 +153,62 @@ def handle_directory(dirname, sample_frac=1.0):
             for result in handle_url(dirname+os.sep+filename):
                 yield result
 
+SPOOF_HEADERS = {'User-Agent': "Mozilla/5.0 (X11; Linux x86_64; rv:2.0.1) Gecko/20100101 Firefox/4.0.1"}
+HEADERS = {'User-Agent': "Luminoso/2.0 (http://lumino.so)"}
+
+def handle_html(data, url=None, name=None):
+    raise NotImplementedError
+
+def handle_wiki(data, url, name):
+    """
+    Handle raw wiki text, stripping out most markup.
+
+    Credit/blame for this code goes to Dennis Clark.
+    """
+    def remove_wiki_tags(string):
+        p = re.compile(r'<.*?>')
+        r = re.compile('\{\{[^\{]*?\}\}',re.DOTALL)
+        s = re.compile('&lt;.*?&gt;')
+        t = re.compile('\[\[[^\]]*?\|')
+        u = re.compile('&quot;|&amp;|\]\]|\[\[|mdash;|===|==')
+        v = re.compile('Notes.*|References.*',re.DOTALL)
+        w = re.compile('\[http.*?\]')        
+        return w.sub('',v.sub('',u.sub('',t.sub(' ',s.sub(' ',r.sub(' ',r.sub(' ',p.sub(' ', string))))))))
+
+    yield {
+        'text': remove_wiki_tags(data),
+        'url': url.split('?')[0],
+        'name': name
+    }
+
+def handle_remote_url(url, name=None):
+    """
+    Handle a URL that indicates the file should be retrieved over the Internet.
+
+    TODO: better content type detection.
+    """
+    req = urllib2.Request(url, headers=HEADERS)
+    try:
+        stream = urllib2.urlopen(req)
+        data = stream.read()
+        stream.close()
+        if url.endswith('.json'):
+            json_obj = json.loads(data)
+            for result in handle_json_obj(json_obj, url, name):
+                yield result
+        elif url.endswith('?format=raw'):
+            for result in handle_wiki(data, url, name):
+                yield result
+        elif url.endswith('.html') or url.endswith('.htm') or '<html>' in data[:1000] or '<HTML>' in data[:1000]:
+            for result in handle_html(data, url, name):
+                yield result
+        else:
+            for result in handle_text(data, url, name):
+                yield result
+        
+    except IOError:
+        LOG.warn("Could not read %s" % url)
+
 def handle_url(url, name=None, sample_frac=1.0):
     """
     Handle a file specified by its URL (by default, a local file).
@@ -155,7 +220,11 @@ def handle_url(url, name=None, sample_frac=1.0):
 
     TODO: handle schemas that aren't local files.
     """
-    if os.access(url, os.F_OK):
+    if (url.startswith('http://') or url.startswith('https://')
+        or url.startswith('ftp://')):
+        for result in handle_remote_url(url, name):
+            yield result
+    elif os.access(url, os.F_OK):
         if os.path.isdir(url): # it's a directory
             for result in handle_directory(url, sample_frac=sample_frac):
                 yield result
