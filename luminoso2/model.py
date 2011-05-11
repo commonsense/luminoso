@@ -703,6 +703,77 @@ class LuminosoModel(object):
         model.config['iteration'] = 1000
         return model
 
+    def recompute(self, background_data, newconfig=None, partial=False):
+        """
+        Re-learn a model with new parameters or new background knowledge,
+        given its existing term database.
+
+        TODO: un-duplicate code between this and .make
+        """
+        config = self.config
+        if newconfig is not None:
+            for key, value in newconfig.items():
+                config[key] = value
+
+        rows = config['num_concepts']
+        cols = config['num_axes']
+
+        U, Sigma, _ = background_data.svd(k=cols)
+
+        newU = divisi2.DenseMatrix((rows, cols))
+        rows_to_copy = U.shape[0]
+        if rows < rows_to_copy:
+            raise ValueError("num_concepts is too small to fit the "
+                             "existing concepts.")
+        cols_to_copy = min(cols, U.shape[1])
+        newU[:rows_to_copy, :cols_to_copy] = \
+          U[:rows_to_copy, :cols_to_copy]
+        newU.row_labels = U.row_labels
+        newSigma = Sigma[:cols_to_copy]
+        
+        # Make sure that the matrix has a PrioritySet for its row labels.
+        _prioritize_labels(newU, rows)
+
+        more_terms = self.database.top_terms(rows)
+        for termobj in more_terms:
+            newU.row_labels.add(termobj.term, termobj.relevance)
+            if len(newU.row_labels.items) == rows:
+                break
+        
+        self.priority = newU.row_labels
+
+        if partial:
+            # set partial=True when you already have the unblended.svd file
+            # and you just want to blend it with something different
+            combined_update = divisi2.load(self.filename_in_dir('unblended.svd'))
+        else:
+            LOG.info('computing update svds')
+            updates = compute_update_svds(self)
+            LOG.info('reducing update svds')
+            combined_update = reduce_update_svds(updates)
+            LOG.info('saving reduced matrix')
+            divisi2.save(combined_update, self.filename_in_dir('unblended.svd'))
+        
+        LOG.info('computing blend')
+        # rescale to perform rough blending
+        blend_magnitude = combined_update[1][0]
+        newSigma /= newSigma[0]
+        newSigma *= blend_magnitude
+
+        final_updates = [combined_update, (newU, newSigma, newU)]
+        LOG.info('reducing blend')
+        blendedU, blendedS, blendedV = reduce_update_svds(final_updates)
+        self.u = divisi2.DenseMatrix(
+            blendedU[:, :cols],
+            row_labels=self.priority
+        )
+        self.s = blendedS
+
+        LOG.info('saving final results')
+        # set my U and S accordingly
+        self.save_config()
+        self.save_data()
+
 def _default_config():
     "The default configuration for new studies."
     config = Config()
@@ -778,7 +849,7 @@ k = 200 # FIXME
 def do_svd(mat):
     return mat.svd(k=k)
 
-def compute_update_svds(model, batch_size=100):
+def compute_update_svds(model, batch_size=1000):
     global the_model
     the_model = model # yeah, this is ugly. Sorry.
     from multiprocessing import Pool

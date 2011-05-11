@@ -154,7 +154,7 @@ class SimpleNLPReader(TextReader):
         memory = []
         prev_token = None
 
-        for token in tokens:
+        for token in tokens[:1000]:
             if token: # protect in case we get an empty token somehow
                 self._attenuate(memory)
                 active_terms = []
@@ -224,7 +224,7 @@ class SimpleNLPEnglishReader(SimpleNLPReader):
         'than', 'do', 'just', 'how', 'out', 'much', 'both', 'other'
     ]
 
-    def __init__(self, distance_weight=0.8, negation_weight=-0.5, cutoff=0.1):
+    def __init__(self, distance_weight=0.75, negation_weight=-0.5, cutoff=0.25):
         """
         Create a reader that reads English text using `simplenlp`. You can
         optionally adjust the weights for how much various terms affect
@@ -269,7 +269,7 @@ class SimpleNLPJapaneseReader(SimpleNLPReader):
     PUNCT_TOKENS = [u"''", u"``", u"'", u"`", u":", u";", u'-', u'--', u'---',
                     u"は"]
 
-    def __init__(self, distance_weight=0.8, negation_weight=-0.5, cutoff=0.1):
+    def __init__(self, distance_weight=0.75, negation_weight=-0.5, cutoff=0.25):
         """
         Create a reader that reads English text using `simplenlp`. You can
         optionally adjust the weights for how much various terms affect
