@@ -14,12 +14,11 @@ from __future__ import with_statement   # for Python 2.5 support
 import divisi2
 import numpy as np
 from divisi2.fileIO import load_pickle, save_pickle
-from divisi2.reconstructed import ReconstructedMatrix
 from divisi2.ordered_set import PrioritySet
+from luminoso2.svdupdate import general_svd_update
 from luminoso2.term_database import TermDatabase, _BIG
 from luminoso2.text_readers import get_reader, DOCUMENT, TAG
 from luminoso2.document_handlers import handle_url
-from collections import defaultdict
 import os
 import sys
 from config import Config
@@ -46,14 +45,17 @@ class LuminosoModel(object):
     Luminoso learns new domain-specific knowledge.
     """
     CONFIG_FILENAME = 'luminoso.cfg'
-    ASSOC_FILENAME = 'associations.rmat'
+    DATA_FILENAME = 'data.pkl'
     DB_FILENAME = 'terms.sqlite'
+    _update_k = 100
 
-    def __init__(self, model_dir):
+    def __init__(self, model_dir, model_data=None):
         """
         A LuminosoModel is constructed from `dir`, a path to a directory.
         This directory will contain saved versions of various matrices, as
         well as a SQLite database of terms and documents.
+
+        model_data, if passed, is a tuple (U, Sigma) of model data. Otherwise it's loaded from a pickle.
         """
         if not isinstance(model_dir, unicode):
             # Ensure that paths are unicode.
@@ -64,7 +66,10 @@ class LuminosoModel(object):
                           % model_dir)
         self.dir = model_dir
         self._load_config()
-        self._load_assoc()
+        if model_data:
+            self._set_data(model_data)
+        else:
+            self._load_data()
         self.database = TermDatabase(
           self.filename_in_dir(LuminosoModel.DB_FILENAME)
         )
@@ -111,33 +116,30 @@ class LuminosoModel(object):
         json.dump(stats, out, indent=2, ensure_ascii=False)
         out.close()
 
-    def _load_assoc(self):
-        "Load the association matrix and priority queue from a file."
-        if self.file_exists_in_dir(LuminosoModel.ASSOC_FILENAME):
-            self.assoc = load_pickle(
-                self.filename_in_dir(LuminosoModel.ASSOC_FILENAME)
+    def _load_data(self):
+        "Load the model data from a file."
+        data = load_pickle(
+            self.filename_in_dir(LuminosoModel.DATA_FILENAME)
             )
-            assert isinstance(self.assoc, ReconstructedMatrix)
-        else:
-            raise IOError("This LuminosoModel does not have an "
-                          "'associations.rmat' file. Use LuminosoModel.make() "
-                          "to make a valid LuminosoModel.")
-        self.assoc.make_symmetric()
-        assert isinstance(self.assoc.row_labels, PrioritySet)
+        self._set_data(data)
 
-        self.priority = self.assoc.row_labels
+    def _set_data(self, model_data):
+        self.u, self.sigma = model_data
+        self.save_data()
+        self.priority = self.u.row_labels
+        assert isinstance(self.priority, PrioritySet)
         self.priority.listen_for_drops(self.on_drop)
 
-    def save_assoc(self):
-        "Save the association matrix to a file."
-        save_pickle(self.assoc, 
-                    self.filename_in_dir(LuminosoModel.ASSOC_FILENAME))
+    def save_data(self):
+        "Save the model data to a file."
+        save_pickle((self.u, self.sigma),
+                    self.filename_in_dir(LuminosoModel.DATA_FILENAME))
     
     def on_drop(self, index, key):
         """
         Handle when a key falls out of the PrioritySet.
         """
-        self.assoc.left[index, :] = 0
+        self.u[index, :] = 0
 
     def add_document(self, doc, reader_name=None):
         """
@@ -200,9 +202,14 @@ class LuminosoModel(object):
         Given a previously added document, get the list of weighted terms
         that appear in it, as (term, weight) tuples.
         """
-        return [(term2, weight) for (weight, term1, term2)
-                in self.get_document_connections(docid)
-                if term1 == DOCUMENT]
+        if docid in self.connections_cache:
+            return [(term2, weight) for (weight, term1, term2)
+                    in self.get_document_connections(docid)
+                    if term1 == DOCUMENT]
+        else:
+            doc = self.database.get_document(docid)
+            terms = json.loads(doc.terms)
+            return terms
     
     def get_document_tags(self, docid):
         """
@@ -222,7 +229,7 @@ class LuminosoModel(object):
                 norm_factor = ((self.database.count_term(term1) + 1)
                                * (self.database.count_term(term2) + 1)) ** .5
                 yield weight/norm_factor, term1, term2
-    
+
     def index_term(self, term, priority=None):
         """
         Ensure that a term is in both the database and the PrioritySet.
@@ -230,9 +237,7 @@ class LuminosoModel(object):
 
         Returns the index of the term in the set.
         """
-        index = self.priority.add(term)
-        if priority:
-            self.priority.update(term, priority)
+        index = self.priority.add(term, priority)
         return index
 
     def get_term_idf(self, term):
@@ -243,45 +248,24 @@ class LuminosoModel(object):
             self.idf_cache[term] = idf
             return idf
 
-    def learn_assoc(self, weight, term1, term2):
-        """
-        Learn the strength of the association between term1 and term2,
-        both of which should exist in self.priority for efficiency's sake.
-        For the purpose of testing, however, we can still add the terms.
-        """
-        try:
-            row = self.priority.index(term1)
-        except KeyError:
-            row = self.priority.add(term1)
-        try:
-            col = self.priority.index(term2)
-        except KeyError:
-            col = self.priority.add(term2)
-
-        mse = self.assoc.hebbian_increment(row, col, weight)
-        return mse
-
-    def learn_from(self, url, study=None, iterations=1):
+    def learn_from(self, url, study=None, batch_size=1000):
         """
         Given a URL or file path that points to a collection of documents,
         learn from all of those documents. They may also be added to a
         study at the same time.
-
-        Default to 1 iteration, because on a reasonable amount of data that
-        will be all you need.
         """
-        self.add_from_url(url, study, learn_iterations=iterations)
-        self.save_assoc()
+        self.add_from_url(url, study, learn=True, batch_size=batch_size)
+        self.save_data()
         self.save_config()
     # compatibility with previous docs
     learn_from_url = learn_from
 
-    def add_from(self, url, study=None, learn_iterations=0, batch_size=1000):
+    def add_from(self, url, study=None, learn=False, batch_size=1000):
         """
-        Given a URL or file path that points to a collection of documents,
-        add all the documents to the database. If `learn_iterations` is 0,
-        the concept model will not change. When greater than 0, this 
-        implements `learn_from_url`.
+        Given a URL or file path that points to a collection of
+        documents, add all the documents to the database. If `learn`
+        is False, the concept model will not change; otherwise, this
+        implements `learn_from`.
 
         This is the main loop that one should use to train a model with a
         batch of documents.
@@ -290,17 +274,25 @@ class LuminosoModel(object):
         batch = []
         while True:
             if len(batch) == batch_size:
-                self.add_batch(lambda: iter(batch), study, learn_iterations)
+                self.add_batch(batch, study, learn=learn)
                 batch[:] = []
             try:
                 batch.append(next(stream))
             except StopIteration:
-                self.add_batch(lambda: iter(batch), study, learn_iterations)
+                self.add_batch(batch, study, learn=learn)
                 batch[:] = []
                 break
+        
+        # If this was a study, make a document matrix for it.
+        if study is not None:
+            LOG.info("Making document matrix for %r" % study)
+            self.update_doc_matrix(study)
+        #LOG.info("Updating tag matrix")
+        #self.update_tag_matrix()
+
     add_from_url = add_from
 
-    def add_batch(self, stream_func, study=None, learn_iterations=0):
+    def add_batch(self, batch, study=None, learn=False):
         """
         Add a batch of documents from some source, a `stream_func` that
         when called returns an iterator over the documents.
@@ -310,59 +302,66 @@ class LuminosoModel(object):
 
         # First pass: add documents to the term database, and meanwhile
         # collect full texts and tags.
-        for doc in stream_func():
+        for doc in batch:
             docid = self.add_document(doc)
             reader = get_reader(doc['reader'])
             for term, fulltext in reader.extract_term_texts(doc['text']):
                 fulltext_cache[term] = fulltext
             if study is not None:
                 self.database.set_tag_on_document(docid, 'study', study)
-        
+
         LOG.info("Committing documents to the database")
         self.database.commit()
 
         LOG.info("Collecting relevant terms")
         self.database.update_relevance()
 
-        if learn_iterations:
-            # Second pass (optional): find how much we should update the
-            # ReconstructedMatrix entries based on the word associations
-            # we discover.
-            learn_accumulator = defaultdict(float)
-            for doc in stream_func():
-                for weight, term1, term2\
-                 in self.document_assoc_updates(doc['url']):
-                    if term1 in self.priority and term2 in self.priority:
-                        learn_accumulator[(term1, term2)] += weight
+        if learn:
+            # Second pass (optional): update the projection based on
+            # the word associations we discover.
 
-            # Now actually apply those total updates. Multiple times, if asked.
-            total = len(learn_accumulator)
-            for iter in xrange(learn_iterations):
-                LOG.info("Updating association matrix: pass %d" % (iter+1))
-                i = 0
-                avg_err = 1.0
-                for term1, term2 in learn_accumulator:
-                    i += 1
-                    if (i % 100) == 0:
-                        LOG.info("Learned %d/%d; err=%4.4f"
-                                 % (i, total, avg_err))
-                    weight = learn_accumulator[(term1, term2)]
-                    err = self.learn_assoc(weight, term1, term2)
-                    avg_err = (.999 * avg_err) + (.001 * err)
-        
+            # Compute the SVD of this set of updates.
+            nterms, k = self.u.shape
+            values, rows, cols = [], [], []
+            for doc in batch:
+                for weight, term1, term2 in self.document_assoc_updates(doc['url']):
+                    try:
+                        row = self.priority.index(term1)
+                        col = self.priority.index(term2)
+                    except KeyError:
+                        # Terms fell out of the priorityset.
+                        continue
+                    values.append(weight)
+                    values.append(weight)
+                    rows.append(row)
+                    cols.append(col)
+                    rows.append(col)
+                    cols.append(row)
+            LOG.info('Analyzing new associations...')
+            update_matrix = divisi2.SparseMatrix.from_lists(values, rows, cols,
+                                                            nrows=nterms,
+                                                            ncols=nterms)
+            update_u, update_s, update_v = update_matrix.svd(k=self._update_k)
+
+            # Strip to bare NumPy
+            U = np.asarray(self.u)
+            A = np.multiply(np.asarray(update_u), np.asarray(update_s))
+            B = np.asarray(update_v)
+
+            # Apply SVD update.
+            LOG.info('Updating projection with new associations...')
+            new_u, new_sigma, _ = general_svd_update(U, self.sigma, U, A, B, k)
+
+            # Update the stored model.
+            self.u = divisi2.DenseMatrix(new_u, self.priority, None)
+            self.sigma = new_sigma
+
         # Finally, update the full texts of the terms we saw.
         LOG.info("Updating full texts")
         for term, fulltext in fulltext_cache.items():
             self.database.set_term_text(term, fulltext)
         self.database.commit()
-        
-        # If this was a study, make a document matrix for it.
-        if study is not None:
-            LOG.info("Making document matrix for %r" % study)
-            self.update_doc_matrix(study)
-        LOG.info("Updating tag matrix")
-        self.update_tag_matrix()
-    
+
     def docs_in_study(self, study_name='all'):
         """
         Get a list of all documents in the given study.
@@ -403,7 +402,7 @@ class LuminosoModel(object):
 
     def update_tag_matrix(self):
         """
-        Collect the tags in a particular study, and make a dense matrix
+        Collect the tags in a model, and make a dense matrix
         from them representing their average positions in this semantic space.
         """
         all_tags = self.database.all_tags()
@@ -448,10 +447,16 @@ class LuminosoModel(object):
         )
         for i in xrange(num):
             term = top_terms[i]
-            term_mat[i, :] = self.assoc.left[self.priority.index(term)]
+            term_mat[i, :] = self.u[self.priority.index(term)]
 
         mat = term_mat.concatenate(self.get_doc_matrix(study_name))
         write_packed(mat, self.filename_in_dir(study_name), denormalize)
+
+    def spectrally_associate(self, vec):
+        """
+        Multiply vec by e^(sqrt(S)/2).
+        """
+        return vec.multiply(np.exp(np.sqrt(self.sigma)/2))
 
     def vector_from_terms(self, terms):
         """
@@ -471,8 +476,8 @@ class LuminosoModel(object):
                 index = self.priority.index(term)
                 tfidf_weight = weight * self.get_term_idf(term) * self.database.normalized_relevance(term)
                 vec[index] = tfidf_weight / total_weight
-        category = divisi2.dot(vec, self.assoc.left)
-        return category
+        category = divisi2.dot(vec, self.u)
+        return self.spectrally_associate(category)
 
     def vector_from_text(self, text, reader_name=None):
         """
@@ -511,7 +516,7 @@ class LuminosoModel(object):
         associated terms. You can run the `top_items()` method of this vector
         to get the most associated terms.
         """
-        return divisi2.dot(self.assoc.left, vec)
+        return divisi2.dot(self.spectrally_associate(self.u), vec)
     
     def domain_terms_similar_to_vector(self, vec):
         """
@@ -528,7 +533,7 @@ class LuminosoModel(object):
             if (self.priority.priority.has_key(i) and
                 self.priority.priority[i] < 1e6):
                 mask[i] = True
-        return divisi2.multiply(divisi2.dot(self.assoc.left.normalize_rows(offset=1.0), vec), mask)
+        return divisi2.multiply(self.terms_similar_to_vector(vec), mask)
     
     def docs_similar_to_vector(self, vec, study='all'):
         """
@@ -572,10 +577,11 @@ class LuminosoModel(object):
         streaming and very large studies.
         """
         stats = {'correlation': {}, 'centrality': {}}
+        assoc = np.asarray(self.spectrally_associate(self.u))
 
         # calculate the rms concept-concept similarity, as a scale factor
-        mean_concept = np.mean(self.assoc.left_view, axis=0)
-        concept_concept = np.dot(self.assoc.left_view, mean_concept)
+        mean_concept = np.mean(assoc, axis=0)
+        concept_concept = np.dot(assoc, mean_concept)
         baseline = np.sqrt(np.mean(concept_concept ** 2))
 
         # np.asarray it so that we can apply numpy functions to it safely.
@@ -586,7 +592,7 @@ class LuminosoModel(object):
         # documents in this study are like each other. That distribution
         # (and particularly its mean) is called "consistency".
         mean_document = np.mean(np.asarray(study_matrix), axis=0)
-        mean_doc_projections = np.dot(self.assoc.left_view, mean_document)
+        mean_doc_projections = np.dot(assoc, mean_document)
 
         stats['consistency'] = _mean_var_stats(mean_doc_projections, baseline)
 
@@ -596,7 +602,7 @@ class LuminosoModel(object):
         for c_row in xrange(canonical_matrix.shape[0]):
             canonical_id = canonical_matrix.row_label(c_row)
             canonical_vec = np.asarray(canonical_matrix[c_row, :])
-            canonical_projections = np.dot(self.assoc.left_view,
+            canonical_projections = np.dot(assoc,
                                            canonical_vec)
             correlation_stats = _mean_var_stats(canonical_projections,
                                                 baseline)
@@ -612,44 +618,41 @@ class LuminosoModel(object):
         return "<LuminosoModel: %r>" % self.dir
 
     @staticmethod
-    def make(model_dir, orig_dmat, config):
+    def make(model_dir, model_data, config):
         """
         Make a new LuminosoModel in the (nonexistent) directory `dir`,
-        with initial half-association matrix `orig_dmat`. (A half-association
-        matrix is a matrix that gives an association matrix when it is
-        multiplied by its transpose.)
+        with initial data `model_data`.
         """
         # Adjust the size of the matrix to match the config, if necessary.
         if os.access(model_dir, os.F_OK):
             raise StudyExists("The model directory %r already exists." % model_dir)
         rows = config['num_concepts']
         cols = config['num_axes']
-        if orig_dmat.shape != (rows, cols):
+        U, Sigma = model_data
+        if U.shape != (rows, cols):
             dmat = divisi2.DenseMatrix((rows, cols))
-            rows_to_copy = orig_dmat.shape[0]
+            rows_to_copy = U.shape[0]
             if rows < rows_to_copy:
                 raise ValueError("num_concepts is too small to fit the "
                                  "existing concepts.")
-            cols_to_copy = min(cols, orig_dmat.shape[1])
+            cols_to_copy = min(cols, U.shape[1])
             dmat[:rows_to_copy, :cols_to_copy] = \
-              orig_dmat[:rows_to_copy, :cols_to_copy]
-            dmat.row_labels = orig_dmat.row_labels
+              U[:rows_to_copy, :cols_to_copy]
+            dmat.row_labels = U.row_labels
+            Sigma = Sigma[:cols_to_copy]
         else:
-            dmat = orig_dmat
+            dmat = U
         
         # Make sure that the matrix has a PrioritySet for its row labels.
         _prioritize_labels(dmat, rows)    
-        rmat = divisi2.reconstruct_symmetric(dmat)
 
         # Make the model directory and populate its initial files.
         os.mkdir(model_dir)
-        rmat_file = model_dir + os.sep + LuminosoModel.ASSOC_FILENAME
         config_file = model_dir + os.sep + LuminosoModel.CONFIG_FILENAME
-        save_pickle(rmat, rmat_file)
         save_config_file(config, config_file)
 
         # Now load the model from that directory and return it.
-        model = LuminosoModel(model_dir)
+        model = LuminosoModel(model_dir, model_data=(dmat, Sigma))
         return model
 
     @staticmethod
@@ -660,7 +663,8 @@ class LuminosoModel(object):
         if config is None:
             config = _default_config()
         mat = divisi2.DenseMatrix((config['num_concepts'], config['num_axes']))
-        model = LuminosoModel.make(model_dir, mat, config)
+        diag_S = np.zeros(config['num_axes'])
+        model = LuminosoModel.make(model_dir, (mat, diag_S), config)
         return model
 
     @staticmethod
@@ -693,10 +697,8 @@ class LuminosoModel(object):
         LOG.info("Making common sense matrix")
         assoc = divisi2.network.conceptnet_assoc(lang)
         (mat_U, diag_S, _) = assoc.normalize_all().svd(k=100)
-        rmat = divisi2.reconstruct_activation(
-            mat_U, diag_S, post_normalize=True
-        )
-        model = LuminosoModel.make(model_dir, rmat.left, config)
+        
+        model = LuminosoModel.make(model_dir, (mat_U, diag_S), config)
         model.config['iteration'] = 1000
         return model
 

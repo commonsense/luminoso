@@ -18,9 +18,10 @@ TAG = u'*Tag*'
 def is_tag(token):
     """
     Is this a token that represents a tag?
+
+    (disable + and - tags for now -- too many false positives)
     """
-    return (token.startswith(u'#') or token.startswith(u'+') or
-            token.startswith(u'-')) and len(token) > 2
+    return (token.startswith(u'#') and len(token) > 2)
 
 class TextReader(object):
     """
