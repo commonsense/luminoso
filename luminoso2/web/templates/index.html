@@ -1,0 +1,68 @@
+<!doctype html>
+<html>
+<head>
+<script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.5.2/jquery.min.js"></script>
+<script type="text/javascript" src="static/jquery.mousewheel.js"></script>
+<script type="text/javascript">
+// requestAnimationFrame shim (http://paulirish.com/2011/requestanimationframe-for-smart-animating/)
+window.requestAnimFrame = (function(){
+      return  window.requestAnimationFrame       || 
+              window.webkitRequestAnimationFrame || 
+              window.mozRequestAnimationFrame    || 
+              window.oRequestAnimationFrame      || 
+              window.msRequestAnimationFrame     || 
+              function(/* function */ callback, /* DOMElement */ element){
+                window.setTimeout(callback, 1000 / 60);
+              };
+    })();
+</script>
+<script type="text/javascript" src="static/readBin.js"></script>
+<script type="text/javascript" src="static/viewer.js"></script>
+<style type="text/css">
+h1 { margin: 0; }
+#docs { float: left; width: 250px; }
+#canvas { }
+#contents { margin-left: 250px; width: 800px; whitespace: pre-wrap; }
+</style>
+<script src="http://cdn.socket.io/stable/socket.io.js"></script>
+<script type="text/javascript">
+var socket;
+
+$(function() {
+  socket = new io.Socket(window.location.hostname, {port: 8888, rememberTransport: false})
+  socket.connect()
+
+  socket.addEvent('connect', function() {
+    console.log('connected');
+  });
+  socket.addEvent('message', function(data) {
+    console.log(data);
+  })
+
+  var docs = $('#docs')
+  docs.change(function() {
+    var url = docs.val()
+    $.getJSON('/docs?url='+url, function(data) {
+      $('#contents').text(data.text);
+    });
+  });
+  $.getJSON('/docs', function (data) {
+   $.each(data.docs, function (idx,url) {
+      $("<option>").text(url).appendTo(docs);
+    });
+  });
+
+  window.viewer = new Viewer(document.getElementById("canvas"))
+  window.viewer.setData('/viewer/all/coords', '/viewer/all/names')
+});
+</script>
+</head>
+
+<body>
+<h1>Luminoso</h1>
+<select id="docs" size=10></select>
+<canvas id="canvas" width="800" height="600" style="border: 1px inset #333"></canvas>
+<div id="contents"></div>
+
+</body>
+</html>
