@@ -224,6 +224,10 @@ def handle_url(url, name=None, sample_frac=1.0):
         or url.startswith('ftp://')):
         for result in handle_remote_url(url, name):
             yield result
+    elif url.startswith('enron://'):
+        from luminoso2.email_handler import handle_enron
+        for result in handle_enron(url):
+            yield result
     elif os.access(url, os.F_OK):
         if os.path.isdir(url): # it's a directory
             for result in handle_directory(url, sample_frac=sample_frac):
