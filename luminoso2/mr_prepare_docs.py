@@ -5,20 +5,10 @@ Prepares a set of documents for a map-reduce job.
 import os
 from mrjob.protocol import JSONValueProtocol
 from luminoso2.document_handlers import handle_url
+from csc_utils import in_groups_of
 
 def encode_document(doc):
     return JSONValueProtocol.write(None, doc) + '\n'
-
-def in_groups_of(size, iterator):
-    counter = 0
-    acc = []
-    for item in iterator:
-        acc.append(item)
-        counter += 1
-        if counter == size:
-            yield acc
-            acc = []
-            counter = 0
 
 def encode_documents(url, dest_dir, batch_size=100, start_at=0):
     for idx, batch in enumerate(in_groups_of(batch_size, handle_url(url)), start_at):
