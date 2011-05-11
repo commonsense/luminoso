@@ -202,9 +202,14 @@ class LuminosoModel(object):
         Given a previously added document, get the list of weighted terms
         that appear in it, as (term, weight) tuples.
         """
-        return [(term2, weight) for (weight, term1, term2)
-                in self.get_document_connections(docid)
-                if term1 == DOCUMENT]
+        if docid in self.connections_cache:
+            return [(term2, weight) for (weight, term1, term2)
+                    in self.get_document_connections(docid)
+                    if term1 == DOCUMENT]
+        else:
+            doc = self.database.get_document(docid)
+            terms = json.loads(doc.terms)
+            return terms
     
     def get_document_tags(self, docid):
         """
@@ -279,6 +284,14 @@ class LuminosoModel(object):
                 self.add_batch(batch, study, learn=learn)
                 batch[:] = []
                 break
+        
+        # If this was a study, make a document matrix for it.
+        if study is not None:
+            LOG.info("Making document matrix for %r" % study)
+            self.update_doc_matrix(study)
+        LOG.info("Updating tag matrix")
+        self.update_tag_matrix()
+
     add_from_url = add_from
 
     def add_batch(self, batch, study=None, learn=False):
@@ -323,6 +336,8 @@ class LuminosoModel(object):
                     values.append(weight)
                     rows.append(row)
                     cols.append(col)
+                    rows.append(col)
+                    cols.append(row)
             LOG.info('Analyzing new associations...')
             update_matrix = divisi2.SparseMatrix.from_lists(values, rows, cols,
                                                             nrows=nterms,
@@ -347,13 +362,6 @@ class LuminosoModel(object):
         for term, fulltext in fulltext_cache.items():
             self.database.set_term_text(term, fulltext)
         self.database.commit()
-
-        # If this was a study, make a document matrix for it.
-        if study is not None:
-            LOG.info("Making document matrix for %r" % study)
-            self.update_doc_matrix(study)
-        LOG.info("Updating tag matrix")
-        self.update_tag_matrix()
 
     def docs_in_study(self, study_name='all'):
         """
@@ -395,7 +403,7 @@ class LuminosoModel(object):
 
     def update_tag_matrix(self):
         """
-        Collect the tags in a particular study, and make a dense matrix
+        Collect the tags in a model, and make a dense matrix
         from them representing their average positions in this semantic space.
         """
         all_tags = self.database.all_tags()

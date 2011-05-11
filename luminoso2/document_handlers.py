@@ -219,7 +219,7 @@ def handle_remote_url(url, name=None):
     whether a document contains HTML, JSON, or something else. The server
     might even tell us. It might even be correct.
     """
-    req = urllib2.Request(url, headers=HEADERS)
+    req = urllib2.Request(url, headers=SPOOF_HEADERS)
     try:
         stream = urllib2.urlopen(req)
         data = stream.read()
