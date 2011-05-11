@@ -579,10 +579,11 @@ class LuminosoModel(object):
         streaming and very large studies.
         """
         stats = {'correlation': {}, 'centrality': {}}
+        assoc = np.asarray(self.spectrally_associate(self.u))
 
         # calculate the rms concept-concept similarity, as a scale factor
-        mean_concept = np.mean(self.assoc.left_view, axis=0)
-        concept_concept = np.dot(self.assoc.left_view, mean_concept)
+        mean_concept = np.mean(assoc, axis=0)
+        concept_concept = np.dot(assoc, mean_concept)
         baseline = np.sqrt(np.mean(concept_concept ** 2))
 
         # np.asarray it so that we can apply numpy functions to it safely.
@@ -593,7 +594,7 @@ class LuminosoModel(object):
         # documents in this study are like each other. That distribution
         # (and particularly its mean) is called "consistency".
         mean_document = np.mean(np.asarray(study_matrix), axis=0)
-        mean_doc_projections = np.dot(self.assoc.left_view, mean_document)
+        mean_doc_projections = np.dot(assoc, mean_document)
 
         stats['consistency'] = _mean_var_stats(mean_doc_projections, baseline)
 
@@ -603,7 +604,7 @@ class LuminosoModel(object):
         for c_row in xrange(canonical_matrix.shape[0]):
             canonical_id = canonical_matrix.row_label(c_row)
             canonical_vec = np.asarray(canonical_matrix[c_row, :])
-            canonical_projections = np.dot(self.assoc.left_view,
+            canonical_projections = np.dot(assoc,
                                            canonical_vec)
             correlation_stats = _mean_var_stats(canonical_projections,
                                                 baseline)
