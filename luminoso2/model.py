@@ -292,6 +292,25 @@ class LuminosoModel(object):
 
     add_from_url = add_from
 
+    def _update_matrix(self, batch):
+        nterms, k = self.u.shape
+        values, rows, cols = [], [], []
+        for doc_url in batch:
+            for weight, term1, term2 in self.document_assoc_updates(doc_url):
+                try:
+                    row = self.priority.index(term1)
+                    col = self.priority.index(term2)
+                except KeyError:
+                    # Terms fell out of the priorityset.
+                    continue
+                values.append(weight)
+                rows.append(row)
+                cols.append(col)
+                rows.append(col)
+                cols.append(row)
+        return divisi2.SparseMatrix.from_lists(values, rows, cols,
+                                               nrows=nterms, ncols=nterms)
+
     def add_batch(self, batch, study=None, learn=False):
         """
         Add a batch of documents from some source, a `stream_func` that
@@ -319,28 +338,10 @@ class LuminosoModel(object):
         if learn:
             # Second pass (optional): update the projection based on
             # the word associations we discover.
+            update_matrix = self._update_matrix([doc['url'] for doc in batch])
 
             # Compute the SVD of this set of updates.
-            nterms, k = self.u.shape
-            values, rows, cols = [], [], []
-            for doc in batch:
-                for weight, term1, term2 in self.document_assoc_updates(doc['url']):
-                    try:
-                        row = self.priority.index(term1)
-                        col = self.priority.index(term2)
-                    except KeyError:
-                        # Terms fell out of the priorityset.
-                        continue
-                    values.append(weight)
-                    values.append(weight)
-                    rows.append(row)
-                    cols.append(col)
-                    rows.append(col)
-                    cols.append(row)
             LOG.info('Analyzing new associations...')
-            update_matrix = divisi2.SparseMatrix.from_lists(values, rows, cols,
-                                                            nrows=nterms,
-                                                            ncols=nterms)
             update_u, update_s, update_v = update_matrix.svd(k=self._update_k)
 
             # Strip to bare NumPy
@@ -350,7 +351,7 @@ class LuminosoModel(object):
 
             # Apply SVD update.
             LOG.info('Updating projection with new associations...')
-            new_u, new_sigma, _ = general_svd_update(U, self.sigma, U, A, B, k)
+            new_u, new_sigma, _ = general_svd_update(U, self.sigma, U, A, B, U.shape[1])
 
             # Update the stored model.
             self.u = divisi2.DenseMatrix(new_u, self.priority, None)
@@ -754,6 +755,79 @@ def save_config_file(config, filename):
     config.save(out)
     out.close()
 
+the_model = None
+def _update_matrix(batch):
+    global the_model
+    nterms, k = the_model.u.shape
+    values, rows, cols = [], [], []
+    for doc_url in batch:
+        for weight, term1, term2 in the_model.document_assoc_updates(doc_url):
+            try:
+                row = the_model.priority.index(term1)
+                col = the_model.priority.index(term2)
+            except KeyError:
+                # Terms fell out of the priorityset.
+                continue
+            values.append(weight)
+            rows.append(row)
+            cols.append(col)
+    return divisi2.SparseMatrix.from_lists(values, rows, cols,
+                                           nrows=nterms, ncols=nterms)
+
+k = 200 # FIXME
+def do_svd(mat):
+    return mat.svd(k=k)
+
+def compute_update_svds(model, batch_size=100):
+    global the_model
+    the_model = model # yeah, this is ugly. Sorry.
+    from multiprocessing import Pool
+    pool = Pool()
+    from csc_utils import in_groups_of
+
+    ## First, add all the documents.
+    #model.add_from(url)
+
+    LOG.info('Computing update matrices...')
+    docs = model.database.list_documents()
+    update_matrices = pool.map(_update_matrix, in_groups_of(batch_size, docs))
+
+    LOG.info('Computing update SVDs...')
+    return pool.map(do_svd, update_matrices)
+
+def reduce_update_svds(update_svds):
+    from csc_utils import in_groups_of
+    # Reduce, in a tree.
+    todo = update_svds[:]
+    while len(todo) > 1:
+        pairs = list(in_groups_of(2, todo))
+        LOG.info('Blending %d pairs', len(pairs))
+        todo = []
+        for pair in pairs:
+            if len(pair) == 1:
+                # Last one.
+                todo.append(pair[0])
+                continue
+
+            # Blend the pair of SVDs.
+            (u_a, s_a, v_a), (u_b, s_b, v_b) = pair
+            
+            # Strip to bare NumPy
+            U = np.asarray(u_a)
+            S = s_a
+            A = np.multiply(np.asarray(u_b), np.asarray(s_b))
+            B = np.asarray(v_b)
+
+            # Compute updated SVD.
+            new_u, new_sigma, _ = general_svd_update(U, S, U, A, B, k)
+
+            todo.append((new_u, new_sigma, new_u))
+
+    return todo[0]
+#            # Update the stored model.
+#            self.u = divisi2.DenseMatrix(new_u, self.priority, None)
+#            self.sigma = new_sigma
+    
 def run_in_directory(dir, lang='en'):
     """
     When run as a script, this module will take in a path to a Luminoso1-style
