@@ -289,8 +289,8 @@ class LuminosoModel(object):
         if study is not None:
             LOG.info("Making document matrix for %r" % study)
             self.update_doc_matrix(study)
-        LOG.info("Updating tag matrix")
-        self.update_tag_matrix()
+        #LOG.info("Updating tag matrix")
+        #self.update_tag_matrix()
 
     add_from_url = add_from
 
@@ -664,7 +664,8 @@ class LuminosoModel(object):
         if config is None:
             config = _default_config()
         mat = divisi2.DenseMatrix((config['num_concepts'], config['num_axes']))
-        model = LuminosoModel.make(model_dir, mat, config)
+        diag_S = np.zeros(config['num_axes'])
+        model = LuminosoModel.make(model_dir, (mat, diag_S), config)
         return model
 
     @staticmethod
