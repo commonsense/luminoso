@@ -202,9 +202,14 @@ class LuminosoModel(object):
         Given a previously added document, get the list of weighted terms
         that appear in it, as (term, weight) tuples.
         """
-        return [(term2, weight) for (weight, term1, term2)
-                in self.get_document_connections(docid)
-                if term1 == DOCUMENT]
+        if docid in self.connections_cache:
+            return [(term2, weight) for (weight, term1, term2)
+                    in self.get_document_connections(docid)
+                    if term1 == DOCUMENT]
+        else:
+            doc = self.database.get_document(docid)
+            terms = json.loads(doc.terms)
+            return terms
     
     def get_document_tags(self, docid):
         """
@@ -232,9 +237,7 @@ class LuminosoModel(object):
 
         Returns the index of the term in the set.
         """
-        index = self.priority.add(term)
-        if priority:
-            self.priority.update(term, priority)
+        index = self.priority.add(term, priority)
         return index
 
     def get_term_idf(self, term):
@@ -279,6 +282,14 @@ class LuminosoModel(object):
                 self.add_batch(batch, study, learn=learn)
                 batch[:] = []
                 break
+        
+        # If this was a study, make a document matrix for it.
+        if study is not None:
+            LOG.info("Making document matrix for %r" % study)
+            self.update_doc_matrix(study)
+        #LOG.info("Updating tag matrix")
+        #self.update_tag_matrix()
+
     add_from_url = add_from
 
     def add_batch(self, batch, study=None, learn=False):
@@ -321,8 +332,11 @@ class LuminosoModel(object):
                         # Terms fell out of the priorityset.
                         continue
                     values.append(weight)
+                    values.append(weight)
                     rows.append(row)
                     cols.append(col)
+                    rows.append(col)
+                    cols.append(row)
             LOG.info('Analyzing new associations...')
             update_matrix = divisi2.SparseMatrix.from_lists(values, rows, cols,
                                                             nrows=nterms,
@@ -347,13 +361,6 @@ class LuminosoModel(object):
         for term, fulltext in fulltext_cache.items():
             self.database.set_term_text(term, fulltext)
         self.database.commit()
-
-        # If this was a study, make a document matrix for it.
-        if study is not None:
-            LOG.info("Making document matrix for %r" % study)
-            self.update_doc_matrix(study)
-        LOG.info("Updating tag matrix")
-        self.update_tag_matrix()
 
     def docs_in_study(self, study_name='all'):
         """
@@ -395,7 +402,7 @@ class LuminosoModel(object):
 
     def update_tag_matrix(self):
         """
-        Collect the tags in a particular study, and make a dense matrix
+        Collect the tags in a model, and make a dense matrix
         from them representing their average positions in this semantic space.
         """
         all_tags = self.database.all_tags()
@@ -570,10 +577,11 @@ class LuminosoModel(object):
         streaming and very large studies.
         """
         stats = {'correlation': {}, 'centrality': {}}
+        assoc = np.asarray(self.spectrally_associate(self.u))
 
         # calculate the rms concept-concept similarity, as a scale factor
-        mean_concept = np.mean(self.assoc.left_view, axis=0)
-        concept_concept = np.dot(self.assoc.left_view, mean_concept)
+        mean_concept = np.mean(assoc, axis=0)
+        concept_concept = np.dot(assoc, mean_concept)
         baseline = np.sqrt(np.mean(concept_concept ** 2))
 
         # np.asarray it so that we can apply numpy functions to it safely.
@@ -584,7 +592,7 @@ class LuminosoModel(object):
         # documents in this study are like each other. That distribution
         # (and particularly its mean) is called "consistency".
         mean_document = np.mean(np.asarray(study_matrix), axis=0)
-        mean_doc_projections = np.dot(self.assoc.left_view, mean_document)
+        mean_doc_projections = np.dot(assoc, mean_document)
 
         stats['consistency'] = _mean_var_stats(mean_doc_projections, baseline)
 
@@ -594,7 +602,7 @@ class LuminosoModel(object):
         for c_row in xrange(canonical_matrix.shape[0]):
             canonical_id = canonical_matrix.row_label(c_row)
             canonical_vec = np.asarray(canonical_matrix[c_row, :])
-            canonical_projections = np.dot(self.assoc.left_view,
+            canonical_projections = np.dot(assoc,
                                            canonical_vec)
             correlation_stats = _mean_var_stats(canonical_projections,
                                                 baseline)
@@ -655,7 +663,8 @@ class LuminosoModel(object):
         if config is None:
             config = _default_config()
         mat = divisi2.DenseMatrix((config['num_concepts'], config['num_axes']))
-        model = LuminosoModel.make(model_dir, mat, config)
+        diag_S = np.zeros(config['num_axes'])
+        model = LuminosoModel.make(model_dir, (mat, diag_S), config)
         return model
 
     @staticmethod
