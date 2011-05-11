@@ -334,6 +334,7 @@ class LuminosoModel(object):
                         # Terms fell out of the priorityset.
                         continue
                     values.append(weight)
+                    values.append(weight)
                     rows.append(row)
                     cols.append(col)
                     rows.append(col)
