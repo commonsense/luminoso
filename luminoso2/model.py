@@ -125,6 +125,7 @@ class LuminosoModel(object):
 
     def _set_data(self, model_data):
         self.u, self.sigma = model_data
+        self.assoc = self.spectrally_associate(self.u).normalize_rows(offset=1.0)
         self.save_data()
         self.priority = self.u.row_labels
         assert isinstance(self.priority, PrioritySet)
@@ -356,6 +357,7 @@ class LuminosoModel(object):
             # Update the stored model.
             self.u = divisi2.DenseMatrix(new_u, self.priority, None)
             self.sigma = new_sigma
+            self.assoc = self.spectrally_associate(self.u).normalize_rows(offset=1.0)
 
         # Finally, update the full texts of the terms we saw.
         LOG.info("Updating full texts")
@@ -477,7 +479,7 @@ class LuminosoModel(object):
                 index = self.priority.index(term)
                 tfidf_weight = weight * self.get_term_idf(term) * self.database.normalized_relevance(term)
                 vec[index] = tfidf_weight / total_weight
-        category = divisi2.dot(vec, self.u)
+        category = divisi2.dot(vec, self.assoc)
         return self.spectrally_associate(category)
 
     def vector_from_text(self, text, reader_name=None):
@@ -578,7 +580,7 @@ class LuminosoModel(object):
         streaming and very large studies.
         """
         stats = {'correlation': {}, 'centrality': {}}
-        assoc = np.asarray(self.spectrally_associate(self.u))
+        assoc = np.asarray(self.assoc)
 
         # calculate the rms concept-concept similarity, as a scale factor
         mean_concept = np.mean(assoc, axis=0)
@@ -767,7 +769,8 @@ class LuminosoModel(object):
             blendedU[:, :cols],
             row_labels=self.priority
         )
-        self.s = blendedS
+        self.sigma = blendedS[:cols]
+        self.assoc = self.spectrally_associate(self.u).normalize_rows(offset=1.0)
 
         LOG.info('saving final results')
         # set my U and S accordingly
