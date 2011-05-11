@@ -237,9 +237,7 @@ class LuminosoModel(object):
 
         Returns the index of the term in the set.
         """
-        index = self.priority.add(term)
-        if priority:
-            self.priority.update(term, priority)
+        index = self.priority.add(term, priority)
         return index
 
     def get_term_idf(self, term):
