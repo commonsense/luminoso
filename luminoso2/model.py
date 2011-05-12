@@ -904,6 +904,7 @@ def _update_matrix(batch):
                                            nrows=nterms, ncols=nterms)
 
 k = 200 # FIXME
+num_cpus = 2
 def do_svd(mat):
     return mat.svd(k=k)
 
@@ -911,7 +912,7 @@ def compute_update_svds(model, batch_size=1000):
     global the_model
     the_model = model # yeah, this is ugly. Sorry.
     from multiprocessing import Pool
-    pool = Pool()
+    pool = Pool(num_cpus)
     from csc_utils import in_groups_of
 
     ## First, add all the documents.
