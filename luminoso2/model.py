@@ -125,7 +125,7 @@ class LuminosoModel(object):
 
     def _set_data(self, model_data):
         self.u, self.sigma = model_data
-        self.assoc = self.spectrally_associate(self.u).normalize_rows(offset=0.001)
+        self.assoc = self.spectrally_associate(self.u).col_mean_center()[0].normalize_rows(offset=0.001)
         self.save_data()
         self.priority = self.u.row_labels
         assert isinstance(self.priority, PrioritySet)
@@ -204,6 +204,9 @@ class LuminosoModel(object):
             doc.terms = json.dumps(terms)
             self.database.commit()
 
+        if self.ignore_negations:
+            connections = [(abs(weight), term1, term2)
+                           for (weight, term1, term2) in connections]
         return connections
     
     def get_document_terms(self, docid):
@@ -218,7 +221,7 @@ class LuminosoModel(object):
         else:
             doc = self.database.get_document(docid)
             terms = json.loads(doc.terms)
-            return terms
+            return [(term, abs(weight)) for (term, weight) in terms]
     
     def get_document_tags(self, docid):
         """
@@ -365,7 +368,7 @@ class LuminosoModel(object):
             # Update the stored model.
             self.u = divisi2.DenseMatrix(new_u, self.priority, None)
             self.sigma = new_sigma
-            self.assoc = self.spectrally_associate(self.u).normalize_rows(offset=0.001)
+            self.assoc = self.spectrally_associate(self.u).col_mean_center()[0].normalize_rows(offset=0.001)
 
         # Finally, update the full texts of the terms we saw.
         LOG.info("Updating full texts")
@@ -469,27 +472,35 @@ class LuminosoModel(object):
         """
         return vec.multiply(np.exp(np.sqrt(self.sigma)/2))
 
-    def vector_from_terms(self, terms):
+    def vector_from_tag(self, tag, value, input_only=False):
+        vecs = [self.vector_from_document(doc, input_only=input_only)
+                for doc in self.database.documents_with_tag_value(tag, value)]
+        return sum(vecs)
+
+    def vector_from_terms(self, terms, input_only=False):
         """
         Get a category vector representing the given set of weighted terms,
         expressed as (term, weight) tuples. This will apply TF-IDF weighting.
         """
-        total_weight = 0.0
-        for _, weight in terms:
-            total_weight += abs(weight)
-
+        total_weight = 0.000001
         vec = divisi2.DenseVector(
             np.zeros((len(self.priority),)),
             labels=self.priority
         )
+        for _, weight in terms:
+            total_weight += abs(weight)
+
         for term, weight in terms:
             if term in self.priority:
                 index = self.priority.index(term)
-                tfidf_weight = weight * self.get_term_idf(term) * self.database.normalized_relevance(term)
-                vec[index] = tfidf_weight / total_weight
-        return divisi2.dot(vec, self.assoc)
+                tfidf_weight = weight * self.get_term_idf(term)
+                assoc_weight = np.linalg.norm(self.assoc.row_named(term))
+                vec[index] = tfidf_weight * assoc_weight / total_weight
+        if input_only:
+            return vec
+        return divisi2.dot(vec.normalize(), self.assoc)
 
-    def vector_from_text(self, text, reader_name=None):
+    def vector_from_text(self, text, reader_name=None, input_only=False):
         """
         Get a category vector in this model representing the given text,
         with TF-IDF applied.
@@ -500,8 +511,8 @@ class LuminosoModel(object):
         terms = []
         for weight, term1, term2 in reader.extract_connections(text):
             if term1 == DOCUMENT:
-                terms.append((term2, weight))
-        return self.vector_from_terms(terms)
+                terms.append((term2, abs(weight)))
+        return self.vector_from_terms(terms, input_only=input_only)
     
     def vector_from_input(self):
         """
@@ -512,13 +523,13 @@ class LuminosoModel(object):
         text = raw_input('> ')
         return self.vector_from_text(text.decode('utf-8'))
 
-    def vector_from_document(self, doc_id):
+    def vector_from_document(self, doc_id, input_only=False):
         """
         Get a category vector for the given known document, with TF-IDF
         applied.
         """
         terms = self.get_document_terms(doc_id)
-        return self.vector_from_terms(terms)
+        return self.vector_from_terms(terms, input_only=input_only)
     
     def terms_similar_to_vector(self, vec):
         """
@@ -551,7 +562,7 @@ class LuminosoModel(object):
         associated documents in the study. You can run the `top_items()`
         method of this vector to get the most associated documents.
         """
-        return divisi2.dot(self.get_doc_matrix(study).normalize_rows(offset=0.001), vec)
+        return divisi2.dot(self.get_doc_matrix(study), vec)
 
     def tags_similar_to_vector(self, vec):
         """
@@ -559,7 +570,7 @@ class LuminosoModel(object):
         associated tags in the study. You can run the `top_items()`
         method of this vector to get the most associated tags.
         """
-        return divisi2.dot(self.get_tag_matrix().normalize_rows(offset=0.001), vec)
+        return divisi2.dot(self.get_tag_matrix(), vec)
     
     def show_sim(self, similarities, n=10):
         """
@@ -735,8 +746,7 @@ class LuminosoModel(object):
         combinedS /= combinedS[0]
         newSigma /= newSigma[0]
         
-        # XXX dividing common sense by 10 for now
-        final_updates = [(combinedU, combinedS, combinedU), (newU, newSigma/10, newU)]
+        final_updates = [(combinedU, combinedS, combinedU), (newU, newSigma, newU)]
         LOG.info('reducing blend')
         blendedU, blendedS, blendedV = reduce_update_svds(final_updates)
         self.u = divisi2.DenseMatrix(
@@ -744,7 +754,7 @@ class LuminosoModel(object):
             row_labels=self.priority
         )
         self.sigma = blendedS[:cols]
-        self.assoc = self.spectrally_associate(self.u).normalize_rows(offset=0.001)
+        self.assoc = self.spectrally_associate(self.u).col_mean_center()[0].normalize_rows(offset=0.001)
 
         LOG.info('saving final results')
         # set my U and S accordingly
@@ -767,6 +777,7 @@ class CanonicalStats(object):
         mean_concept = np.mean(assoc, axis=0)
         concept_concept = np.dot(assoc, mean_concept)
         self.baseline = np.sqrt(np.mean(concept_concept ** 2))
+        #self.baseline = 1.0 # FIXME: should be rms(cosine similarity between concepts)
 
         # First, find the (presumed) normal distribution for how much the
         # documents in this study are like each other. That distribution
@@ -775,6 +786,7 @@ class CanonicalStats(object):
         mean_doc_projections = np.dot(study_matrix, mean_document)
 
         self.consistency = _mean_var_stats(mean_doc_projections, self.baseline)
+        #assert -1 <= self.consistency['mean'] <= 1
 
         # Next, find a similar distribution for how much the documents in
         # this study are like each canonical document.
