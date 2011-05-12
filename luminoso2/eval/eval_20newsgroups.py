@@ -26,7 +26,7 @@ newsgroups = [
 ]
 group_names, study_names, canonical_names = zip(*newsgroups)
 
-def laod_model(model_path, regen_doc_matrices):
+def load_model(model_path, regen_doc_matrices):
     model = luminoso2.load(model_path)
     if regen_doc_matrices:
         for study in list(study_names) + ['Canonical']:
@@ -63,7 +63,7 @@ def do_model(path, regen, title, filename):
     from matplotlib import pyplot as plt
     plt.title(title)
     plt.savefig(filename)
-    return correlation_mean
+    return correlation_means
 
 def cs1_assoc0(regen):
     return do_model('20news_cs1_assoc0', regen, 'Topic alignment with common sense', 'cs1_assoc0.png')
