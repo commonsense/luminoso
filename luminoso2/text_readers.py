@@ -97,7 +97,9 @@ class SimpleNLPReader(TextReader):
         tokens = self.tokenize(text)
         tokens_out = []
         for token in tokens:
-            if is_tag(token):
+            if token in self.nl.punctuation:
+                tokens_out.append(token)
+            elif is_tag(token):
                 tokens_out.append(token)
             elif self.nl.is_stopword(token):
                 pass
