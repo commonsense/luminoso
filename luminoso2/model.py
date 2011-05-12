@@ -186,7 +186,7 @@ class LuminosoModel(object):
         return doc['url']
     
     fixup_terms = True
-    ignore_negation = False
+    ignore_negation = True
     
     def get_document_connections(self, docid):
         """
