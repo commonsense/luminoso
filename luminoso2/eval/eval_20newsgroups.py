@@ -1,10 +1,5 @@
-import sys
 import luminoso2
-
-model_path, = sys.argv[1:]
-
-model = luminoso2.load(model_path)
-canonical_basename = model.docs_in_study('Canonical')[0].rsplit('/', 1)[0]
+import numpy as np
 
 newsgroups = [
     ('sci.med', 'med', 'sci_med'),
@@ -29,27 +24,53 @@ newsgroups = [
     ('talk.religion.misc', 'religion_misc', 'religion_misc')
 ]
 group_names, study_names, canonical_names = zip(*newsgroups)
-canonical_fullnames = [u'%s/%s.txt' % (canonical_basename, canonical) for canonical in canonical_names]
 N = len(newsgroups)
 
-stats = [model.canonical_stats(study) for study in study_names]
-terms = [model.database.get_document(canonical).text.strip() for canonical in canonical_fullnames]
+def load_model(model_path, regen_doc_matrices):
+    model = luminoso2.load(model_path)
+    if regen_doc_matrices:
+        for study in study_names + ['Canonical']:
+            model.update_doc_matrix(study)
 
-centralities = [[stats[newsgroup_idx].centrality[canonical_fullnames[canonical_idx]]
-                 for canonical_idx in range(N)]
-                for newsgroup_idx in range(N)]
+    canonical_basename = model.docs_in_study('Canonical')[0].rsplit('/', 1)[0]
+    canonical_fullnames = [u'%s/%s.txt' % (canonical_basename, canonical) for canonical in canonical_names]
 
-def plot_centralities(centralities):
+    stats = [model.canonical_stats(study) for study in study_names]
+    terms = [model.database.get_document(canonical).text.strip() for canonical in canonical_fullnames]
+
+    centralities = [[stats[newsgroup_idx].centrality[canonical_fullnames[canonical_idx]]
+                     for canonical_idx in range(N)]
+                    for newsgroup_idx in range(N)]
+    return model, canonical_basename, stats, terms, centralities
+
+def plot_alignment(centralities, terms):
     from matplotlib import pyplot as plt
-    import numpy as np
     plt.yticks(np.arange(N)+0.5, group_names)
     plt.xticks(np.arange(N)+0.5, terms, rotation='vertical')
-    plt.pcolor(np.array(centralities), cmap='hot')
-    plt.title('Topic alignment with common sense')
+    plt.pcolor(centralities, cmap='hot')
     plt.subplots_adjust(bottom=0.22, left=0.3)
-    plt.clim(-60, 10)
-    cbar = plt.colorbar(ticks=[-60, -50, -40, -30, -20, -10, 0, 10])
+    #plt.clim(-60, 10)
+    cbar = plt.colorbar()#ticks=[-60, -50, -40, -30, -20, -10, 0, 10])
     cbar.set_label('Centrality')
+
+def do_model(path, regen, title, filename):
+    model, canonical_basename, stats, terms, centralities = load_model(path, regen)
+    centralities = np.array(centralities)
+    plot_alignment(centralities, terms)
+    from matplotlib import pyplot as plt
+    plt.title(title)
+    plt.savefig(filename)
+    non_diag_elements = np.ravel(centralities - np.diag(np.diag(centralities)))
+    return centralities, non_diag_elements
+    
+def cs1_assoc0(regen):
+    return do_model('20news_cs1_assoc0', regen, 'Topic alignment with common sense', 'cs1_assoc0.png')
+
+def cs0_assoc0(regen):
+    return do_model('20news_cs0_assoc0', regen, 'Topic alignment without common sense', 'cs0_assoc0.png')
+
+#def compare_commonsense_with_not():
+    
     
 """
 from pylab import *
@@ -78,7 +99,7 @@ for row in xrange(20):
 yticks(arange(20)+0.5, [ro[0] for ro in row_order])
 xticks(arange(20)+0.5, [co[0] for co in col_order], rotation='vertical')
 pcolor(arranged, cmap='hot')
-title('Topic alignment without common sense')
+title()
 subplots_adjust(bottom=0.22, left=0.3)
 clim(-60, 10)
 cbar = colorbar(ticks=[-60, -50, -40, -30, -20, -10, 0, 10])
