@@ -1,5 +1,6 @@
 import luminoso2
 import numpy as np
+from scipy.stats import ttest_1samp
 
 newsgroups = [
     ('sci.med', 'med', 'sci_med'),
@@ -25,23 +26,24 @@ newsgroups = [
 ]
 group_names, study_names, canonical_names = zip(*newsgroups)
 
-def load_model(model_path, regen_doc_matrices):
+def laod_model(model_path, regen_doc_matrices):
     model = luminoso2.load(model_path)
     if regen_doc_matrices:
         for study in list(study_names) + ['Canonical']:
             model.update_doc_matrix(study)
+    return model
 
+def analyze_model(model):
     canonical_basename = model.docs_in_study('Canonical')[0].rsplit('/', 1)[0]
     canonical_fullnames = [u'%s/%s.txt' % (canonical_basename, canonical) for canonical in canonical_names]
 
     stats = [model.canonical_stats(study) for study in study_names]
     terms = [model.database.get_document(canonical).text.strip() for canonical in canonical_fullnames]
 
-    canonical_fullnames.pop(-1)
     correlation_means = [[stats[newsgroup_idx].correlation[canonical_fullnames[canonical_idx]]['mean']
                           for canonical_idx in range(len(canonical_fullnames))]
                          for newsgroup_idx in range(len(newsgroups))]
-    return model, canonical_basename, stats, terms, correlation_means
+    return canonical_fullnames, stats, terms, correlation_means
 
 def plot_alignment(correlation_means, terms):
     from matplotlib import pyplot as plt
@@ -54,27 +56,44 @@ def plot_alignment(correlation_means, terms):
     cbar.set_label('Correlation mean')
 
 def do_model(path, regen, title, filename):
-    model, canonical_basename, stats, terms, correlation_means = load_model(path, regen)
+    model = load_model(path, regen)
+    canonical_fullnames, stats, terms, correlation_means = analyze_model(model)
     correlation_means = np.array(correlation_means)
     plot_alignment(correlation_means, terms)
     from matplotlib import pyplot as plt
     plt.title(title)
     plt.savefig(filename)
-    non_diag_elements = np.ravel(correlation_means - np.diag(np.diag(correlation_means)))
-    return correlation_means, non_diag_elements
-    
+    return correlation_mean
+
 def cs1_assoc0(regen):
     return do_model('20news_cs1_assoc0', regen, 'Topic alignment with common sense', 'cs1_assoc0.png')
 
 def cs0_assoc0(regen):
     return do_model('20news_cs0_assoc0', regen, 'Topic alignment without common sense', 'cs0_assoc0.png')
 
+## Rough statistical significance tests
+def diagonal_vs_non(mat):
+    diags, nondiags = [], []
+    for row in range(mat.shape[0]):
+        for col in range(mat.shape[1]):
+            (diags if row==col else nondiags).append(mat[row,col])
+    return diags, nondiags
+
+def diagonal_significance(mat):
+    diags, nondiags = diagonal_vs_non(mat)
+    print 'diags', np.mean(diags), 'nondiags', np.mean(nondiags)
+    return ttest_1samp(diags, np.mean(nondiags))
+
+def is_model_good(model):
+    canonical_fullnames, stats, terms, correlation_means = analyze_model(model)
+    correlation_means = np.array(correlation_means)
+    return diagonal_significance(correlation_means)
+
 #def compare_commonsense_with_not():
     
     
 """
 from pylab import *
-from scipy.stats import ttest_rel
 import pickle
 
 figure(1)
@@ -105,7 +124,5 @@ clim(-60, 10)
 cbar = colorbar(ticks=[-60, -50, -40, -30, -20, -10, 0, 10])
 cbar.set_label('Centrality')
 
-print np.mean(sense_diffs), np.mean(no_sense_diffs)
-print ttest_rel(no_sense_diffs, sense_diffs)
 show()
 """
