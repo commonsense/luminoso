@@ -723,11 +723,12 @@ class LuminosoModel(object):
         
         LOG.info('computing blend')
         # rescale to perform rough blending
-        blend_magnitude = combined_update[1][0]
+        combinedU, combinedS, combinedV = combined_update
+        combinedS /= combinedS[0]
         newSigma /= newSigma[0]
-        newSigma *= blend_magnitude
-
-        final_updates = [combined_update, (newU, newSigma, newU)]
+        
+        # XXX dividing common sense by 10 for now
+        final_updates = [(combinedU, combinedS, combinedU), (newU, newSigma/10, newU)]
         LOG.info('reducing blend')
         blendedU, blendedS, blendedV = reduce_update_svds(final_updates)
         self.u = divisi2.DenseMatrix(
