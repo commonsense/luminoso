@@ -745,11 +745,14 @@ class LuminosoModel(object):
 
 class CanonicalStats(object):
     def __init__(self, assoc, study_matrix, canonical_matrix):
+        canonical_matrix = canonical_matrix.normalize_rows()
+        self.canonical_similarity = canonical_matrix.dot(canonical_matrix.T)
         self.correlation = {}
         self.centrality = {}
 
         # np.asarray it so that we can apply numpy functions to it safely.
         assoc = np.asarray(assoc)
+        self.doc_labels = study_matrix.row_labels
         study_matrix = np.asarray(study_matrix)
 
         # calculate the rms concept-concept similarity, as a scale factor
@@ -760,7 +763,7 @@ class CanonicalStats(object):
         # First, find the (presumed) normal distribution for how much the
         # documents in this study are like each other. That distribution
         # (and particularly its mean) is called "consistency".
-        mean_document = np.mean(np.asarray(study_matrix), axis=0)
+        mean_document = np.mean(study_matrix, axis=0)
         mean_doc_projections = np.dot(study_matrix, mean_document)
 
         self.consistency = _mean_var_stats(mean_doc_projections, self.baseline)
