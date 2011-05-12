@@ -125,7 +125,7 @@ class LuminosoModel(object):
 
     def _set_data(self, model_data):
         self.u, self.sigma = model_data
-        self.assoc = self.spectrally_associate(self.u).normalize_rows(offset=0.001)
+        self.assoc = self.spectrally_associate(self.u).col_mean_center()[0].normalize_rows(offset=0.001)
         self.save_data()
         self.priority = self.u.row_labels
         assert isinstance(self.priority, PrioritySet)
@@ -358,7 +358,7 @@ class LuminosoModel(object):
             # Update the stored model.
             self.u = divisi2.DenseMatrix(new_u, self.priority, None)
             self.sigma = new_sigma
-            self.assoc = self.spectrally_associate(self.u).normalize_rows(offset=0.001)
+            self.assoc = self.spectrally_associate(self.u).col_mean_center()[0].normalize_rows(offset=0.001)
 
         # Finally, update the full texts of the terms we saw.
         LOG.info("Updating full texts")
@@ -744,7 +744,7 @@ class LuminosoModel(object):
             row_labels=self.priority
         )
         self.sigma = blendedS[:cols]
-        self.assoc = self.spectrally_associate(self.u).normalize_rows(offset=0.001)
+        self.assoc = self.spectrally_associate(self.u).col_mean_center()[0].normalize_rows(offset=0.001)
 
         LOG.info('saving final results')
         # set my U and S accordingly
@@ -753,6 +753,7 @@ class LuminosoModel(object):
 
 class CanonicalStats(object):
     def __init__(self, assoc, study_matrix, canonical_matrix):
+        canonical_matrix = canonical_matrix.normalize_rows()
         self.canonical_similarity = canonical_matrix.dot(canonical_matrix.T)
         self.correlation = {}
         self.centrality = {}
