@@ -196,7 +196,8 @@ class LuminosoModel(object):
             doc = self.database.get_document(docid)
             reader = get_reader(doc.reader)
             connections = list(reader.extract_connections(doc.text))
-        return connections
+        return [(abs(weight), term1, term2)
+                for (weight, term1, term2) in connections]
     
     def get_document_terms(self, docid):
         """
@@ -210,7 +211,7 @@ class LuminosoModel(object):
         else:
             doc = self.database.get_document(docid)
             terms = json.loads(doc.terms)
-            return terms
+            return [(term, abs(weight)) for (term, weight) in terms]
     
     def get_document_tags(self, docid):
         """
