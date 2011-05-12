@@ -488,14 +488,14 @@ class LuminosoModel(object):
         Get a category vector representing the given set of weighted terms,
         expressed as (term, weight) tuples. This will apply TF-IDF weighting.
         """
-        total_weight = 0.0
-        for _, weight in terms:
-            total_weight += abs(weight)
-
+        total_weight = 0.000001
         vec = divisi2.DenseVector(
             np.zeros((len(self.priority),)),
             labels=self.priority
         )
+        for _, weight in terms:
+            total_weight += abs(weight)
+
         for term, weight in terms:
             if term in self.priority:
                 index = self.priority.index(term)
@@ -503,7 +503,7 @@ class LuminosoModel(object):
                 vec[index] = tfidf_weight / total_weight
         if input_only:
             return vec
-        return divisi2.dot(vec, self.assoc)
+        return divisi2.dot(vec.normalize(), self.assoc)
 
     def vector_from_text(self, text, reader_name=None, input_only=False):
         """
@@ -567,7 +567,7 @@ class LuminosoModel(object):
         associated documents in the study. You can run the `top_items()`
         method of this vector to get the most associated documents.
         """
-        return divisi2.dot(self.get_doc_matrix(study).normalize_rows(offset=0.001), vec)
+        return divisi2.dot(self.get_doc_matrix(study), vec)
 
     def tags_similar_to_vector(self, vec):
         """
@@ -575,7 +575,7 @@ class LuminosoModel(object):
         associated tags in the study. You can run the `top_items()`
         method of this vector to get the most associated tags.
         """
-        return divisi2.dot(self.get_tag_matrix().normalize_rows(offset=0.001), vec)
+        return divisi2.dot(self.get_tag_matrix(), vec)
     
     def show_sim(self, similarities, n=10):
         """
@@ -751,8 +751,7 @@ class LuminosoModel(object):
         combinedS /= combinedS[0]
         newSigma /= newSigma[0]
         
-        # XXX dividing common sense by 10 for now
-        final_updates = [(combinedU, combinedS, combinedU), (newU, newSigma/10, newU)]
+        final_updates = [(combinedU, combinedS, combinedU), (newU, newSigma, newU)]
         LOG.info('reducing blend')
         blendedU, blendedS, blendedV = reduce_update_svds(final_updates)
         self.u = divisi2.DenseMatrix(
@@ -769,7 +768,6 @@ class LuminosoModel(object):
 
 class CanonicalStats(object):
     def __init__(self, assoc, study_matrix, canonical_matrix):
-        canonical_matrix = canonical_matrix.normalize_rows()
         self.canonical_similarity = canonical_matrix.dot(canonical_matrix.T)
         self.correlation = {}
         self.centrality = {}
@@ -777,12 +775,14 @@ class CanonicalStats(object):
         # np.asarray it so that we can apply numpy functions to it safely.
         assoc = np.asarray(assoc)
         self.doc_labels = study_matrix.row_labels
+        #normalized_study_matrix = np.asarray(study_matrix.normalize_rows(offset=0.001))
         study_matrix = np.asarray(study_matrix)
 
         # calculate the rms concept-concept similarity, as a scale factor
         mean_concept = np.mean(assoc, axis=0)
         concept_concept = np.dot(assoc, mean_concept)
         self.baseline = np.sqrt(np.mean(concept_concept ** 2))
+        #self.baseline = 1.0 # FIXME: should be rms(cosine similarity between concepts)
 
         # First, find the (presumed) normal distribution for how much the
         # documents in this study are like each other. That distribution
@@ -791,6 +791,7 @@ class CanonicalStats(object):
         mean_doc_projections = np.dot(study_matrix, mean_document)
 
         self.consistency = _mean_var_stats(mean_doc_projections, self.baseline)
+        #assert -1 <= self.consistency['mean'] <= 1
 
         # Next, find a similar distribution for how much the documents in
         # this study are like each canonical document.
