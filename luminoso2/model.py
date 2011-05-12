@@ -731,8 +731,15 @@ class LuminosoModel(object):
         # Make sure that the matrix has a PrioritySet for its row labels.
         _prioritize_labels(newU, rows)
 
-        more_terms = self.database.top_terms(rows)
-        for termobj in more_terms:
+        from luminoso2.term_database import Term
+        from sqlalchemy.sql.expression import desc
+        query = self.database.sql_session.query(Term)\
+                   .filter(Term.term != '*')
+        if self.ignore_bigrams:
+            query = query.filter(~Term.term.like('% %'))
+        query = query.order_by(desc(Term.relevance))
+
+        for termobj in query:
             newU.row_labels.add(termobj.term, termobj.relevance)
             if len(newU.row_labels.items) == rows:
                 break
