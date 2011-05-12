@@ -483,8 +483,9 @@ class LuminosoModel(object):
         for term, weight in terms:
             if term in self.priority:
                 index = self.priority.index(term)
-                tfidf_weight = weight * self.get_term_idf(term) * self.database.normalized_relevance(term)
-                vec[index] = tfidf_weight / total_weight
+                tfidf_weight = weight * self.get_term_idf(term)
+                assoc_weight = np.linalg.norm(self.assoc.row_named(term))
+                vec[index] = tfidf_weight * assoc_weight / total_weight
         if input_only:
             return vec
         return divisi2.dot(vec.normalize(), self.assoc)
