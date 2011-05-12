@@ -760,7 +760,7 @@ class CanonicalStats(object):
         # documents in this study are like each other. That distribution
         # (and particularly its mean) is called "consistency".
         mean_document = np.mean(np.asarray(study_matrix), axis=0)
-        mean_doc_projections = np.dot(assoc, mean_document)
+        mean_doc_projections = np.dot(study_matrix, mean_document)
 
         self.consistency = _mean_var_stats(mean_doc_projections, self.baseline)
 
@@ -769,7 +769,7 @@ class CanonicalStats(object):
         self.canonical_projections = {}
         for c_row, canonical_id in enumerate(canonical_matrix.row_labels):
             canonical_vec = np.asarray(canonical_matrix[c_row, :])
-            canonical_projections = np.dot(assoc,
+            canonical_projections = np.dot(study_matrix,
                                            canonical_vec)
             self.canonical_projections[canonical_id] = canonical_projections
             correlation_stats = _mean_var_stats(canonical_projections,
