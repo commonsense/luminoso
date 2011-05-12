@@ -113,7 +113,7 @@ class LuminosoModel(object):
         stats = self.canonical_stats(study)
         out = codecs.open(self.filename_in_dir(study+'.stats.json'), 'w',
                           encoding='utf-8')
-        json.dump(stats, out, indent=2, ensure_ascii=False)
+        json.dump(stats.as_dict(), out, indent=2, ensure_ascii=False)
         out.close()
 
     def _load_data(self):
@@ -579,43 +579,9 @@ class LuminosoModel(object):
         TODO: average the documents as the study is being learned, allowing
         streaming and very large studies.
         """
-        stats = {'correlation': {}, 'centrality': {}}
-        assoc = np.asarray(self.assoc)
-
-        # calculate the rms concept-concept similarity, as a scale factor
-        mean_concept = np.mean(assoc, axis=0)
-        concept_concept = np.dot(assoc, mean_concept)
-        baseline = np.sqrt(np.mean(concept_concept ** 2))
-
-        # np.asarray it so that we can apply numpy functions to it safely.
-        study_matrix = np.asarray(self.get_doc_matrix(study))
+        study_matrix = self.get_doc_matrix(study)
         canonical_matrix = self.get_doc_matrix(canonicals)
-
-        # First, find the (presumed) normal distribution for how much the
-        # documents in this study are like each other. That distribution
-        # (and particularly its mean) is called "consistency".
-        mean_document = np.mean(np.asarray(study_matrix), axis=0)
-        mean_doc_projections = np.dot(assoc, mean_document)
-
-        stats['consistency'] = _mean_var_stats(mean_doc_projections, baseline)
-
-        # Next, find a similar distribution for how much the documents in
-        # this study are like each canonical document.
-
-        for c_row in xrange(canonical_matrix.shape[0]):
-            canonical_id = canonical_matrix.row_label(c_row)
-            canonical_vec = np.asarray(canonical_matrix[c_row, :])
-            canonical_projections = np.dot(assoc,
-                                           canonical_vec)
-            correlation_stats = _mean_var_stats(canonical_projections,
-                                                baseline)
-            stats['correlation'][canonical_id] = correlation_stats
-
-            centrality = ((correlation_stats['mean'] -
-                           stats['consistency']['mean'])
-                          / correlation_stats['stderr'])
-            stats['centrality'][canonical_id] = centrality
-        return stats
+        return CanonicalStats(self.assoc, study_matrix, canonical_matrix)
 
     def __repr__(self):
         return "<LuminosoModel: %r>" % self.dir
@@ -776,6 +742,52 @@ class LuminosoModel(object):
         # set my U and S accordingly
         self.save_config()
         self.save_data()
+
+class CanonicalStats(object):
+    def __init__(self, assoc, study_matrix, canonical_matrix):
+        self.correlation = {}
+        self.centrality = {}
+
+        # np.asarray it so that we can apply numpy functions to it safely.
+        assoc = np.asarray(assoc)
+        study_matrix = np.asarray(study_matrix)
+
+        # calculate the rms concept-concept similarity, as a scale factor
+        mean_concept = np.mean(assoc, axis=0)
+        concept_concept = np.dot(assoc, mean_concept)
+        self.baseline = np.sqrt(np.mean(concept_concept ** 2))
+
+        # First, find the (presumed) normal distribution for how much the
+        # documents in this study are like each other. That distribution
+        # (and particularly its mean) is called "consistency".
+        mean_document = np.mean(np.asarray(study_matrix), axis=0)
+        mean_doc_projections = np.dot(assoc, mean_document)
+
+        self.consistency = _mean_var_stats(mean_doc_projections, self.baseline)
+
+        # Next, find a similar distribution for how much the documents in
+        # this study are like each canonical document.
+        self.canonical_projections = {}
+        for c_row, canonical_id in enumerate(canonical_matrix.row_labels):
+            canonical_vec = np.asarray(canonical_matrix[c_row, :])
+            canonical_projections = np.dot(assoc,
+                                           canonical_vec)
+            self.canonical_projections[canonical_id] = canonical_projections
+            correlation_stats = _mean_var_stats(canonical_projections,
+                                                self.baseline)
+            self.correlation[canonical_id] = correlation_stats
+
+            centrality = ((correlation_stats['mean'] -
+                           self.consistency['mean'])
+                          / correlation_stats['stderr'])
+            self.centrality[canonical_id] = centrality
+
+    def as_dict(self):
+        return dict(consistency=self.consistency,
+                    correlation=self.correlation,
+                    centrality=self.centrality)
+
+
 
 def _default_config():
     "The default configuration for new studies."
