@@ -44,6 +44,12 @@ class LuminosoModel(object):
     updated incrementally to take new data into account, which is how
     Luminoso learns new domain-specific knowledge.
     """
+    # Flags that control things we've been fiddling with.
+    fixup_terms = True
+    ignore_negation = True
+    ignore_bigrams = False
+
+
     CONFIG_FILENAME = 'luminoso.cfg'
     DATA_FILENAME = 'data.pkl'
     DB_FILENAME = 'terms.sqlite'
@@ -185,9 +191,6 @@ class LuminosoModel(object):
         self.idf_cache = {}   # invalidate the cache of term IDFs
         return doc['url']
     
-    fixup_terms = True
-    ignore_negation = True
-    
     def get_document_connections(self, docid):
         """
         Given a previously added document, get the list of connections
@@ -255,6 +258,8 @@ class LuminosoModel(object):
 
         Returns the index of the term in the set.
         """
+        if self.ignore_bigrams and ' ' in term:
+            return None
         index = self.priority.add(term, priority)
         return index
 
