@@ -125,7 +125,7 @@ class LuminosoModel(object):
 
     def _set_data(self, model_data):
         self.u, self.sigma = model_data
-        self.assoc = self.spectrally_associate(self.u).normalize_rows(offset=0.01)
+        self.assoc = self.spectrally_associate(self.u).normalize_rows(offset=0.001)
         self.save_data()
         self.priority = self.u.row_labels
         assert isinstance(self.priority, PrioritySet)
@@ -196,6 +196,14 @@ class LuminosoModel(object):
             doc = self.database.get_document(docid)
             reader = get_reader(doc.reader)
             connections = list(reader.extract_connections(doc.text))
+            self.connections_cache[docid] = connections
+            
+            # make sure the terms agree -- important for fixing the 5/11/11
+            # negation bug
+            terms = self.get_document_terms(docid)
+            doc.terms = json.dumps(terms)
+            self.database.commit()
+
         return connections
     
     def get_document_terms(self, docid):
@@ -357,7 +365,7 @@ class LuminosoModel(object):
             # Update the stored model.
             self.u = divisi2.DenseMatrix(new_u, self.priority, None)
             self.sigma = new_sigma
-            self.assoc = self.spectrally_associate(self.u).normalize_rows(offset=0.01)
+            self.assoc = self.spectrally_associate(self.u).normalize_rows(offset=0.001)
 
         # Finally, update the full texts of the terms we saw.
         LOG.info("Updating full texts")
@@ -543,7 +551,7 @@ class LuminosoModel(object):
         associated documents in the study. You can run the `top_items()`
         method of this vector to get the most associated documents.
         """
-        return divisi2.dot(self.get_doc_matrix(study).normalize_rows(offset=0.01), vec)
+        return divisi2.dot(self.get_doc_matrix(study).normalize_rows(offset=0.001), vec)
 
     def tags_similar_to_vector(self, vec):
         """
@@ -551,7 +559,7 @@ class LuminosoModel(object):
         associated tags in the study. You can run the `top_items()`
         method of this vector to get the most associated tags.
         """
-        return divisi2.dot(self.get_tag_matrix().normalize_rows(offset=0.01), vec)
+        return divisi2.dot(self.get_tag_matrix().normalize_rows(offset=0.001), vec)
     
     def show_sim(self, similarities, n=10):
         """
@@ -736,7 +744,7 @@ class LuminosoModel(object):
             row_labels=self.priority
         )
         self.sigma = blendedS[:cols]
-        self.assoc = self.spectrally_associate(self.u).normalize_rows(offset=0.01)
+        self.assoc = self.spectrally_associate(self.u).normalize_rows(offset=0.001)
 
         LOG.info('saving final results')
         # set my U and S accordingly
