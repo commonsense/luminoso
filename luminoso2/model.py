@@ -185,6 +185,9 @@ class LuminosoModel(object):
         self.idf_cache = {}   # invalidate the cache of term IDFs
         return doc['url']
     
+    fixup_terms = True
+    ignore_negation = False
+    
     def get_document_connections(self, docid):
         """
         Given a previously added document, get the list of connections
@@ -198,12 +201,16 @@ class LuminosoModel(object):
             connections = list(reader.extract_connections(doc.text))
             self.connections_cache[docid] = connections
             
-            # make sure the terms agree -- important for fixing the 5/11/11
-            # negation bug
-            terms = self.get_document_terms(docid)
-            doc.terms = json.dumps(terms)
-            self.database.commit()
+            if self.fixup_terms:
+                # make sure the terms agree -- important for fixing the 5/11/11
+                # negation bug
+                terms = self.get_document_terms(docid)
+                doc.terms = json.dumps(terms)
+                self.database.commit()
 
+        if ignore_negation:
+            connections = [(abs(weight), term1, term2)
+                           for (weight, term1, term2) in connections]
         return connections
     
     def get_document_terms(self, docid):
@@ -212,13 +219,15 @@ class LuminosoModel(object):
         that appear in it, as (term, weight) tuples.
         """
         if docid in self.connections_cache:
-            return [(term2, weight) for (weight, term1, term2)
-                    in self.get_document_connections(docid)
-                    if term1 == DOCUMENT]
+            terms = [(term2, weight) for (weight, term1, term2)
+                     in self.get_document_connections(docid)
+                     if term1 == DOCUMENT]
         else:
             doc = self.database.get_document(docid)
             terms = json.loads(doc.terms)
-            return terms
+        if self.ignore_negation:
+            terms = [(term, abs(weight)) for (term, weight) in terms]
+        return terms
     
     def get_document_tags(self, docid):
         """
