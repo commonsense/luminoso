@@ -462,7 +462,12 @@ class LuminosoModel(object):
         """
         return vec.multiply(np.exp(np.sqrt(self.sigma)/2))
 
-    def vector_from_terms(self, terms):
+    def vector_from_tag(self, tag, value, input_only=False):
+        vecs = [self.vector_from_document(doc, input_only=input_only)
+                for doc in self.database.documents_with_tag_value(tag, value)]
+        return sum(vecs)
+
+    def vector_from_terms(self, terms, input_only=False):
         """
         Get a category vector representing the given set of weighted terms,
         expressed as (term, weight) tuples. This will apply TF-IDF weighting.
@@ -480,9 +485,11 @@ class LuminosoModel(object):
                 index = self.priority.index(term)
                 tfidf_weight = weight * self.get_term_idf(term) * self.database.normalized_relevance(term)
                 vec[index] = tfidf_weight / total_weight
+        if input_only:
+            return vec
         return divisi2.dot(vec, self.assoc)
 
-    def vector_from_text(self, text, reader_name=None):
+    def vector_from_text(self, text, reader_name=None, input_only=False):
         """
         Get a category vector in this model representing the given text,
         with TF-IDF applied.
@@ -493,8 +500,8 @@ class LuminosoModel(object):
         terms = []
         for weight, term1, term2 in reader.extract_connections(text):
             if term1 == DOCUMENT:
-                terms.append((term2, weight))
-        return self.vector_from_terms(terms)
+                terms.append((term2, abs(weight)))
+        return self.vector_from_terms(terms, input_only=input_only)
     
     def vector_from_input(self):
         """
@@ -505,13 +512,13 @@ class LuminosoModel(object):
         text = raw_input('> ')
         return self.vector_from_text(text.decode('utf-8'))
 
-    def vector_from_document(self, doc_id):
+    def vector_from_document(self, doc_id, input_only=False):
         """
         Get a category vector for the given known document, with TF-IDF
         applied.
         """
         terms = self.get_document_terms(doc_id)
-        return self.vector_from_terms(terms)
+        return self.vector_from_terms(terms, input_only=input_only)
     
     def terms_similar_to_vector(self, vec):
         """
