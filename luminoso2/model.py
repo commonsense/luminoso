@@ -821,6 +821,8 @@ class CanonicalStats(object):
                     correlation=self.correlation,
                     centrality=self.centrality)
 
+    def __unicode__(self):
+        return unicode(self.as_dict)
 
 
 def _default_config():
