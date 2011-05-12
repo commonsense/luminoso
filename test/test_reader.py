@@ -12,6 +12,11 @@ def test_tagged():
     tokenized = list(reader.extract_tokens('one two three #four'))
     assert_equal(tokenized, ['two', 'three', '#four'])
 
+def test_tokenize():
+    reader = get_reader('simplenlp.en')
+    tokenized = list(reader.extract_tokens('bob, two three. four.'))
+    assert_equal(tokenized, [u'bob', u',', u'two', u'three', u'.', u'four', u'.'])
+
 @raises(KeyError)
 def test_no_reader():
     get_reader('simplenlp.foo')
