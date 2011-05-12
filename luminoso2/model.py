@@ -477,15 +477,17 @@ class LuminosoModel(object):
             np.zeros((len(self.priority),)),
             labels=self.priority
         )
+        for _, weight in terms:
+            total_weight += abs(weight)
+
         for term, weight in terms:
             if term in self.priority:
                 index = self.priority.index(term)
                 tfidf_weight = weight * self.get_term_idf(term) * self.database.normalized_relevance(term)
-                total_weight += tfidf_weight
-                vec[index] = tfidf_weight
+                vec[index] = tfidf_weight / total_weight
         if input_only:
-            return vec / total_weight
-        return divisi2.dot(vec / total_weight, self.assoc)
+            return vec
+        return divisi2.dot(vec.normalize(), self.assoc)
 
     def vector_from_text(self, text, reader_name=None, input_only=False):
         """
