@@ -24,12 +24,11 @@ newsgroups = [
     ('talk.religion.misc', 'religion_misc', 'religion_misc')
 ]
 group_names, study_names, canonical_names = zip(*newsgroups)
-N = len(newsgroups)
 
 def load_model(model_path, regen_doc_matrices):
     model = luminoso2.load(model_path)
     if regen_doc_matrices:
-        for study in study_names + ['Canonical']:
+        for study in list(study_names) + ['Canonical']:
             model.update_doc_matrix(study)
 
     canonical_basename = model.docs_in_study('Canonical')[0].rsplit('/', 1)[0]
@@ -38,30 +37,31 @@ def load_model(model_path, regen_doc_matrices):
     stats = [model.canonical_stats(study) for study in study_names]
     terms = [model.database.get_document(canonical).text.strip() for canonical in canonical_fullnames]
 
-    centralities = [[stats[newsgroup_idx].centrality[canonical_fullnames[canonical_idx]]
-                     for canonical_idx in range(N)]
-                    for newsgroup_idx in range(N)]
-    return model, canonical_basename, stats, terms, centralities
+    canonical_fullnames.pop(-1)
+    correlation_means = [[stats[newsgroup_idx].correlation[canonical_fullnames[canonical_idx]]['mean']
+                          for canonical_idx in range(len(canonical_fullnames))]
+                         for newsgroup_idx in range(len(newsgroups))]
+    return model, canonical_basename, stats, terms, correlation_means
 
-def plot_alignment(centralities, terms):
+def plot_alignment(correlation_means, terms):
     from matplotlib import pyplot as plt
-    plt.yticks(np.arange(N)+0.5, group_names)
-    plt.xticks(np.arange(N)+0.5, terms, rotation='vertical')
-    plt.pcolor(centralities, cmap='hot')
+    plt.yticks(np.arange(len(group_names))+0.5, group_names[::-1])
+    plt.xticks(np.arange(len(terms))+0.5, terms, rotation='vertical')
+    plt.pcolor(np.flipud(correlation_means / np.sqrt(np.mean(correlation_means*correlation_means, axis=0))[np.newaxis,:]), cmap='hot')
     plt.subplots_adjust(bottom=0.22, left=0.3)
     #plt.clim(-60, 10)
     cbar = plt.colorbar()#ticks=[-60, -50, -40, -30, -20, -10, 0, 10])
-    cbar.set_label('Centrality')
+    cbar.set_label('Correlation mean')
 
 def do_model(path, regen, title, filename):
-    model, canonical_basename, stats, terms, centralities = load_model(path, regen)
-    centralities = np.array(centralities)
-    plot_alignment(centralities, terms)
+    model, canonical_basename, stats, terms, correlation_means = load_model(path, regen)
+    correlation_means = np.array(correlation_means)
+    plot_alignment(correlation_means, terms)
     from matplotlib import pyplot as plt
     plt.title(title)
     plt.savefig(filename)
-    non_diag_elements = np.ravel(centralities - np.diag(np.diag(centralities)))
-    return centralities, non_diag_elements
+    non_diag_elements = np.ravel(correlation_means - np.diag(np.diag(correlation_means)))
+    return correlation_means, non_diag_elements
     
 def cs1_assoc0(regen):
     return do_model('20news_cs1_assoc0', regen, 'Topic alignment with common sense', 'cs1_assoc0.png')
