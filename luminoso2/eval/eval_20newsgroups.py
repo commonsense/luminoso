@@ -1,6 +1,6 @@
 import luminoso2
 import numpy as np
-from scipy.stats import ttest_1samp
+from luminoso2.eval.util import diagonal_significance, confusion_matrix
 
 newsgroups = [
     ('sci.med', 'med', 'sci_med'),
@@ -70,19 +70,6 @@ def cs1_assoc0(regen):
 
 def cs0_assoc0(regen):
     return do_model('20news_cs0_assoc0', regen, 'Topic alignment without common sense', 'cs0_assoc0.png')
-
-## Rough statistical significance tests
-def diagonal_vs_non(mat):
-    diags, nondiags = [], []
-    for row in range(mat.shape[0]):
-        for col in range(mat.shape[1]):
-            (diags if row==col else nondiags).append(mat[row,col])
-    return diags, nondiags
-
-def diagonal_significance(mat):
-    diags, nondiags = diagonal_vs_non(mat)
-    print 'diags', np.mean(diags), 'nondiags', np.mean(nondiags)
-    return ttest_1samp(diags, np.mean(nondiags))
 
 def is_model_good(model):
     canonical_fullnames, stats, terms, correlation_means = analyze_model(model)

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-import luminoso2
 import numpy as np
-from scipy.stats import ttest_1samp
+import luminoso2
+from luminoso2.eval.util import diagonal_significance, confusion_matrix
 
 def get_names(model):
     # cut in half for training purposes
@@ -53,19 +53,6 @@ def do_model(path, regen, title, filename):
 
 def wiki_cs1(regen=True):
     return do_model('wiki_en_cs1_assoc0', regen, 'Topic alignment with common sense', 'wiki_en_cs1_assoc0.png')
-
-## Rough statistical significance tests
-def diagonal_vs_non(mat):
-    diags, nondiags = [], []
-    for row in range(mat.shape[0]):
-        for col in range(mat.shape[1]):
-            (diags if row==col else nondiags).append(mat[row,col])
-    return diags, nondiags
-
-def diagonal_significance(mat):
-    diags, nondiags = diagonal_vs_non(mat)
-    print 'diags', np.mean(diags), 'nondiags', np.mean(nondiags)
-    return ttest_1samp(diags, np.mean(nondiags))
 
 def is_model_good(model, filename=None):
     names = get_names(model)
