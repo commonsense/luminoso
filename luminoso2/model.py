@@ -922,10 +922,12 @@ def save_config_file(config, filename):
 
 SENTINEL = 'STOP'
 def _matrix_worker(input, output, model, k):
+    from multiprocessing import current_process
     for batch in iter(input.get, SENTINEL):
-        LOG.info('worker %s computing update matrix')
+        proc = current_process()
+        LOG.info('worker %s (pid=%d) computing update matrix', proc.name, proc.pid)
         update_mat = model._update_matrix(batch)
-        LOG.info('worker %s computing update SVD')
+        LOG.info('worker %s (pid=%d) computing update SVD', proc.name, proc.pid)
         svd = update_mat.svd(k=k)
         output.put(svd)
 
