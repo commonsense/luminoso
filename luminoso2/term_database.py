@@ -15,9 +15,9 @@ from sqlalchemy.sql.expression import desc
 from sqlalchemy import create_engine, Column, Integer, Float, String, Text
 from collections import defaultdict
 try:
-    import json
-except ImportError:
     import simplejson as json
+except ImportError:
+    import json
 import logging
 LOG = logging.getLogger(__name__)
 #logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
