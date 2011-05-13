@@ -505,7 +505,7 @@ class LuminosoModel(object):
             if isinstance(term, basestring) and term in self.priority:
                 index = self.priority.index(term)
                 tfidf_weight = weight * self.get_term_idf(term)
-                assoc_weight = np.linalg.norm(self.assoc.row_named(term))
+                assoc_weight = np.linalg.norm(self.u.row_named(term))
                 vec[index] = tfidf_weight * assoc_weight / total_weight
         if input_only:
             return vec
