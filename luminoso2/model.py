@@ -196,7 +196,7 @@ class LuminosoModel(object):
     def _get_cache_for_text(self, text, reader_name=None):
         # Connections are cached within the model directory as
         # zlib-compressed json-encoded files named by the sha1 of
-        # their text contents.
+        # their utf8-encoded text contents.
 
         if reader_name is None:
             reader_name = self.config['reader']
@@ -204,7 +204,7 @@ class LuminosoModel(object):
         # Check if it's cached on disk yet.
         hasher = hashlib.sha1()
         hasher.update(reader_name+':')
-        hasher.update(text)
+        hasher.update(text.encode('utf8'))
         digest = hasher.hexdigest()
         filename = os.path.join(self._connections_path, digest)
 
