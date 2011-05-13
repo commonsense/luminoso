@@ -45,9 +45,9 @@ class LuminosoModel(object):
     Luminoso learns new domain-specific knowledge.
     """
     # Flags that control things we've been fiddling with.
-    fixup_terms = True
+    fixup_terms = False
     ignore_negation = True
-    ignore_bigrams = False
+    ignore_bigrams = True
 
 
     CONFIG_FILENAME = 'luminoso.cfg'
@@ -502,7 +502,7 @@ class LuminosoModel(object):
             total_weight += abs(weight)
 
         for term, weight in terms:
-            if term in self.priority:
+            if isinstance(term, basestring) and term in self.priority:
                 index = self.priority.index(term)
                 tfidf_weight = weight * self.get_term_idf(term)
                 assoc_weight = np.linalg.norm(self.assoc.row_named(term))
