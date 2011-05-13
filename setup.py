@@ -44,7 +44,7 @@ setup(
     classifiers = classifiers,
     ext_modules = [],
     packages=find_packages()+['icons'],
-    install_requires=['csc-utils >= 0.6.1', 'divisi2 >= 2.2.4', 'jinja2', 'chardet', 'sqlalchemy', 'config', 'simplenlp >= 1.0.1'],
+    install_requires=['csc-utils >= 0.6.1', 'divisi2 >= 2.2.4', 'jinja2', 'chardet', 'sqlalchemy', 'config', 'simplenlp >= 1.0.1', 'BeautifulSoup'],
     package_data={'simplenlp': ['mblem/*.pickle', 'en/*.txt']},
     include_package_data=True,
     #data_files=DATA_FILES,
