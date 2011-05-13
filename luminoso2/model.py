@@ -24,6 +24,7 @@ import sys
 from config import Config
 import logging
 import codecs
+import hashlib, zlib
 try:
     import json
 except ImportError:
@@ -32,6 +33,8 @@ LOG = logging.getLogger(__name__)
 
 class StudyExists(Exception):
     pass
+
+CONNECTION_COMPRESSION_LEVEL = 2
 
 class LuminosoModel(object):
     """
@@ -53,6 +56,7 @@ class LuminosoModel(object):
     CONFIG_FILENAME = 'luminoso.cfg'
     DATA_FILENAME = 'data.pkl'
     DB_FILENAME = 'terms.sqlite'
+    CONNECTIONS_DIR = 'connections_cache'
     _update_k = 100
 
     def __init__(self, model_dir, model_data=None):
@@ -79,8 +83,10 @@ class LuminosoModel(object):
         self.database = TermDatabase(
           self.filename_in_dir(LuminosoModel.DB_FILENAME)
         )
-        self.connections_cache = {}
         self.idf_cache = {}
+        self._connections_path = self.filename_in_dir(self.CONNECTIONS_DIR)
+        if not os.path.isdir(self._connections_path):
+            os.mkdir(self._connections_path)
     
     def filename_in_dir(self, filename):
         """
@@ -167,14 +173,10 @@ class LuminosoModel(object):
         - tags: (key, value) tuples representing tags
         """
         LOG.info("Reading document: %r" % doc['url'])
-        if reader_name is None:
-            reader_name = self.config['reader']
-        reader = get_reader(reader_name)
         text = doc['text']
         tags = doc.get('tags', [])
         doc_terms = []
-        connections = list(reader.extract_connections(text))
-        self.connections_cache[doc['url']] = connections
+        connections = self.get_connections_for_text(text, reader_name)
         for weight, term1, term2 in connections:
             if term1 == DOCUMENT:
                 if isinstance(term2, tuple) and term2[0] == TAG:
@@ -190,26 +192,62 @@ class LuminosoModel(object):
         self.database.add_document(doc)
         self.idf_cache = {}   # invalidate the cache of term IDFs
         return doc['url']
+
+    def _get_cache_for_text(self, text, reader_name=None):
+        # Connections are cached within the model directory as
+        # zlib-compressed json-encoded files named by the sha1 of
+        # their text contents.
+
+        if reader_name is None:
+            reader_name = self.config['reader']
+
+        # Check if it's cached on disk yet.
+        hasher = hashlib.sha1()
+        hasher.update(reader_name+':')
+        hasher.update(text)
+        digest = hasher.hexdigest()
+        filename = os.path.join(self._connections_path, digest)
+
+        # Note that the json module encodes results as utf8 by default.
+        if os.path.exists(filename):
+            return json.loads(zlib.decompress(open(filename,'rb').read()))
+        else:
+            reader = get_reader(reader_name)
+            connections = list(reader.extract_connections(text))
+            term_texts = list(reader.extract_term_texts(text))
+            cache = connections, term_texts
+            with open(filename, 'wb') as f:
+                f.write(zlib.compress(json.dumps(cache), CONNECTION_COMPRESSION_LEVEL))
+            return cache
     
+    def get_connections_for_text(self, text, reader_name=None):
+        '''
+        Get connections for the given text, using the given reader.
+        '''
+        connections, term_texts = self._get_cache_for_text(text, reader_name)
+        return connections
+
+    def get_term_texts_for_text(self, text, reader_name=None):
+        '''
+        Get connections for the given text, using the given reader.
+        '''
+        connections, term_texts = self._get_cache_for_text(text, reader_name)
+        return term_texts
+
     def get_document_connections(self, docid):
         """
         Given a previously added document, get the list of connections
         produced from it.
         """
-        if docid in self.connections_cache:
-            connections = self.connections_cache[docid]
-        else:
-            doc = self.database.get_document(docid)
-            reader = get_reader(doc.reader)
-            connections = list(reader.extract_connections(doc.text))
-            self.connections_cache[docid] = connections
+        doc = self.database.get_document(docid)
+        connections = self.get_connections_for_text(doc.text)
             
-            if self.fixup_terms:
-                # make sure the terms agree -- important for fixing the 5/11/11
-                # negation bug
-                terms = self.get_document_terms(docid)
-                doc.terms = json.dumps(terms)
-                self.database.commit()
+        if self.fixup_terms:
+            # make sure the terms agree -- important for fixing the 5/11/11
+            # negation bug
+            terms = self.get_document_terms(docid)
+            doc.terms = json.dumps(terms)
+            self.database.commit()
 
         if self.ignore_negation:
             connections = [(abs(weight), term1, term2)
@@ -340,14 +378,12 @@ class LuminosoModel(object):
         when called returns an iterator over the documents.
         """
         fulltext_cache = {}
-        self.connections_cache = {}
 
         # First pass: add documents to the term database, and meanwhile
         # collect full texts and tags.
         for doc in batch:
             docid = self.add_document(doc)
-            reader = get_reader(doc['reader'])
-            for term, fulltext in reader.extract_term_texts(doc['text']):
+            for term, fulltext in self.get_term_texts_for_text(doc['text']):
                 fulltext_cache[term] = fulltext
             if study is not None:
                 self.database.set_tag_on_document(docid, 'study', study)
@@ -516,11 +552,8 @@ class LuminosoModel(object):
         Get a category vector in this model representing the given text,
         with TF-IDF applied.
         """
-        if reader_name is None:
-            reader_name = self.config['reader']
-        reader = get_reader(reader_name)
         terms = []
-        for weight, term1, term2 in reader.extract_connections(text):
+        for weight, term1, term2 in self.get_connections_for_text(text, reader_name):
             if term1 == DOCUMENT:
                 terms.append((term2, abs(weight)))
         return self.vector_from_terms(terms, input_only=input_only)
