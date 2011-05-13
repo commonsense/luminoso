@@ -953,6 +953,8 @@ def compute_update_svds(model, batch_size=1000):
         text_batch = [model.get_document_text(docid) for docid in batch]
         task_queue.put(text_batch)
         mat_count += 1
+    # Tell workers they can stop when done.
+    for i in range(num_workers): task_queue.put(SENTINEL)
     LOG.info('Put %d batches of document texts, now awaiting results', mat_count)
     update_svds = []
     for i in range(mat_count):
