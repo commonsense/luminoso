@@ -365,6 +365,7 @@ class LuminosoModel(object):
                 values.append(weight)
                 rows.append(row)
                 cols.append(col)
+                values.append(weight)
                 rows.append(col)
                 cols.append(row)
         return divisi2.SparseMatrix.from_lists(values, rows, cols,
