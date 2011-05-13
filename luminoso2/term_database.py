@@ -15,9 +15,9 @@ from sqlalchemy.sql.expression import desc
 from sqlalchemy import create_engine, Column, Integer, Float, String, Text
 from collections import defaultdict
 try:
-    import json
-except ImportError:
     import simplejson as json
+except ImportError:
+    import json
 import logging
 LOG = logging.getLogger(__name__)
 #logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
@@ -179,11 +179,8 @@ class TermDatabase(object):
             return self.term_cache[term]
         else:
             term_entry = self.sql_session.query(Term).get(term)
-            if term_entry:
-                self.term_cache[term] = term_entry
-                return term_entry
-            else:
-                return None
+            self.term_cache[term] = term_entry
+            return term_entry
 
     def _increment_term_count(self, term, value=1, newdoc=False):
         """

@@ -15,9 +15,9 @@ import htmlentitydefs
 from BeautifulSoup import BeautifulSoup, NavigableString, Tag
 import re
 try:
-    import json
-except ImportError:
     import simplejson as json
+except ImportError:
+    import json
 import logging
 LOG = logging.getLogger(__name__)
 
