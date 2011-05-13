@@ -802,7 +802,7 @@ class LuminosoModel(object):
         combinedS /= combinedS[0]
         newSigma /= newSigma[0]
         
-        if background is None:
+        if background_data is None:
             blendedU, blendedS = combinedU, combinedS
         else:
             final_updates = [(combinedU, combinedS, combinedU), (newU, newSigma, newU)]
