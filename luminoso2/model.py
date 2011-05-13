@@ -260,13 +260,8 @@ class LuminosoModel(object):
         Given a previously added document, get the list of weighted terms
         that appear in it, as (term, weight) tuples.
         """
-        if docid in self.connections_cache:
-            terms = [(term2, weight) for (weight, term1, term2)
-                     in self.get_document_connections(docid)
-                     if term1 == DOCUMENT]
-        else:
-            doc = self.database.get_document(docid)
-            terms = json.loads(doc.terms)
+        doc = self.database.get_document(docid)
+        terms = json.loads(doc.terms)
         if self.ignore_negation:
             terms = [(term, abs(weight)) for (term, weight) in terms]
         return terms
