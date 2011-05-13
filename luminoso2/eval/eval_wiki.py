@@ -4,10 +4,11 @@ import numpy as np
 from scipy.stats import ttest_1samp
 
 def get_names(model):
+    # cut in half for training purposes
     names = [value for tag, value in model.database.all_tags()
              if tag == u'study' and value != 'Canonical' and value != 'FA'
              and value != u'総記']
-    return names
+    return names[::2]
 
 def load_model(model_path, regen_doc_matrices):
     model = luminoso2.load(model_path)
@@ -66,7 +67,35 @@ def diagonal_significance(mat):
     print 'diags', np.mean(diags), 'nondiags', np.mean(nondiags)
     return ttest_1samp(diags, np.mean(nondiags))
 
-def is_model_good(model):
+def is_model_good(model, filename=None):
+    names = get_names(model)
+    for study in list(names) + ['Canonical']:
+        model.update_doc_matrix(study)
     canonical_fullnames, names, stats, terms, correlation_means = analyze_model(model)
     correlation_means = np.array(correlation_means)
+    if filename is not None:
+        from matplotlib import pyplot as plt
+        plot_alignment(correlation_means, terms, names)
+        plt.savefig(filename)
+
     return diagonal_significance(correlation_means)
+
+def multiple_models(model, name='enwiki'):
+    import divisi2
+    background = divisi2.network.conceptnet_assoc('en')
+    assoc_powers = (0.1, 0.01, 0.001, 0.0001, 0.00001, 0.000001)
+    blend_factors = (0.75, 0.5, 0.25)
+    out = open(name+'_model.log', 'a')
+    for a in assoc_powers:
+        for b in blend_factors:
+            print "running", (a,b)
+            model.recompute(background, partial=True, newconfig={
+                'blend_factor': b,
+                'assoc_power': a
+            })
+            filename="%s_%s_%s.png" % (name, a, b)
+            sig, pvalue = is_model_good(model, filename)
+            print "%s,%s,%s,%s" % (a, b, sig, pvalue)
+            print >> out, "%s,%s,%s,%s" % (a, b, sig, pvalue)
+    out.close()
+

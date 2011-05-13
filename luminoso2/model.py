@@ -747,6 +747,8 @@ class LuminosoModel(object):
 
         rows = config['num_concepts']
         cols = config['num_axes']
+        blend_factor = config.get('blend_factor', 0.5)
+        assoc_power = config.get('assoc_power', 1.0)
 
         if background_data is None:
             newU = divisi2.DenseMatrix((rows, cols))
@@ -799,8 +801,8 @@ class LuminosoModel(object):
         LOG.info('computing blend')
         # rescale to perform rough blending
         combinedU, combinedS, combinedV = combined_update
-        combinedS /= combinedS[0]
-        newSigma /= newSigma[0]
+        combinedS /= combinedS / combinedS[0] * (1.0-blend_factor) * assoc_power
+        newSigma = newSigma / newSigma[0] * blend_factor * assoc_power
         
         if background_data is None:
             blendedU, blendedS = combinedU, combinedS
@@ -882,6 +884,7 @@ def _default_config():
     config['reader'] = 'simplenlp.en'
     config['iteration'] = 0
     config['sample_frac'] = 1.0
+    config['blend_factor'] = 1.0
     return config
 
 def _prioritize_labels(mat, num_concepts):
