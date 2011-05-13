@@ -801,7 +801,7 @@ class LuminosoModel(object):
         LOG.info('computing blend')
         # rescale to perform rough blending
         combinedU, combinedS, combinedV = combined_update
-        combinedS /= combinedS / combinedS[0] * (1.0-blend_factor) * assoc_power
+        combinedS = combinedS / combinedS[0] * (1.0-blend_factor) * assoc_power
         newSigma = newSigma / newSigma[0] * blend_factor * assoc_power
         
         if background_data is None:

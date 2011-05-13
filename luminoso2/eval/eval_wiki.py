@@ -80,11 +80,11 @@ def is_model_good(model, filename=None):
 
     return diagonal_significance(correlation_means)
 
-def multiple_models(model, name='enwiki'):
+def multiple_models(model, name='enwiki_again'):
     import divisi2
     background = divisi2.network.conceptnet_assoc('en')
-    assoc_powers = (0.1, 0.01, 0.001, 0.0001, 0.00001, 0.000001)
-    blend_factors = (0.75, 0.5, 0.25)
+    assoc_powers = (0.0625, 0.125, 0.25, 0.5, 1.0, 2.0, 4.0)
+    blend_factors = (0.1, 0.3, 0.5, 0.7, 0.9)
     out = open(name+'_model.log', 'a')
     for a in assoc_powers:
         for b in blend_factors:
