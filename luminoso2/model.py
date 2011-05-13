@@ -25,6 +25,7 @@ from config import Config
 import logging
 import codecs
 import hashlib, zlib
+import random
 try:
     import simplejson as json
 except ImportError:
@@ -216,7 +217,8 @@ class LuminosoModel(object):
             term_texts = list(reader.extract_term_texts(text))
             cache = connections, term_texts
             # Atomically overwrite the file (why isn't this in the standard library??)
-            tmp = filename+'_tmp'
+            # Choose a random tempfile name because another process may be trying to do the same thing.
+            tmp = '%s_tmp_%d' % (filename, random.randrange(1000))
             with open(tmp, 'wb') as f:
                 f.write(zlib.compress(json.dumps(cache), CONNECTION_COMPRESSION_LEVEL))
             os.rename(tmp, filename)
