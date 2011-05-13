@@ -25,6 +25,7 @@ from config import Config
 import logging
 import codecs
 import hashlib, zlib
+import random
 try:
     import simplejson as json
 except ImportError:
@@ -48,7 +49,6 @@ class LuminosoModel(object):
     Luminoso learns new domain-specific knowledge.
     """
     # Flags that control things we've been fiddling with.
-    fixup_terms = False
     ignore_negation = True
     ignore_bigrams = True
 
@@ -216,8 +216,13 @@ class LuminosoModel(object):
             connections = list(reader.extract_connections(text))
             term_texts = list(reader.extract_term_texts(text))
             cache = connections, term_texts
-            with open(filename, 'wb') as f:
+            # Atomically overwrite the file (why isn't this in the standard library??)
+            # Choose a random tempfile name because another process may be trying to do the same thing.
+            tmp = '%s_tmp_%d' % (filename, random.randrange(1000))
+            with open(tmp, 'wb') as f:
                 f.write(zlib.compress(json.dumps(cache), CONNECTION_COMPRESSION_LEVEL))
+            os.rename(tmp, filename)
+
             return cache
     
     def get_connections_for_text(self, text, reader_name=None):
@@ -234,20 +239,16 @@ class LuminosoModel(object):
         connections, term_texts = self._get_cache_for_text(text, reader_name)
         return term_texts
 
+    def get_document_text(self, docid):
+        doc = self.database.get_document(docid)
+        return doc.text
+
     def get_document_connections(self, docid):
         """
         Given a previously added document, get the list of connections
         produced from it.
         """
-        doc = self.database.get_document(docid)
-        connections = self.get_connections_for_text(doc.text)
-            
-        if self.fixup_terms:
-            # make sure the terms agree -- important for fixing the 5/11/11
-            # negation bug
-            terms = self.get_document_terms(docid)
-            doc.terms = json.dumps(terms)
-            self.database.commit()
+        connections = self.get_connections_for_text(self.get_document_text(docid))
 
         if self.ignore_negation:
             connections = [(abs(weight), term1, term2)
@@ -281,8 +282,11 @@ class LuminosoModel(object):
         Given a previously added document, yield triples to use to update the 
         association matrix.
         """
-        LOG.info("Collecting connections from: %r" % docid)
-        connections = self.get_document_connections(docid)
+        for item in self.text_assoc_updates(self.get_document_text(docid)):
+            yield item
+
+    def text_assoc_updates(self, text):
+        connections = self.get_connections_for_text(text)
         for weight, term1, term2 in connections:
             if weight > 0 and term1 != DOCUMENT:
                 norm_factor = ((self.database.count_term(term1) + 1)
@@ -353,11 +357,11 @@ class LuminosoModel(object):
 
     add_from_url = add_from
 
-    def _update_matrix(self, batch):
+    def _update_matrix(self, batch_texts):
         nterms, k = self.u.shape
         values, rows, cols = [], [], []
-        for doc_url in batch:
-            for weight, term1, term2 in self.document_assoc_updates(doc_url):
+        for text in batch_texts:
+            for weight, term1, term2 in self.text_assoc_updates(text):
                 try:
                     row = self.priority.index(term1)
                     col = self.priority.index(term2)
@@ -398,7 +402,7 @@ class LuminosoModel(object):
         if learn:
             # Second pass (optional): update the projection based on
             # the word associations we discover.
-            update_matrix = self._update_matrix([doc['url'] for doc in batch])
+            update_matrix = self._update_matrix([doc['text'] for doc in batch])
 
             # Compute the SVD of this set of updates.
             LOG.info('Analyzing new associations...')
@@ -918,31 +922,48 @@ def save_config_file(config, filename):
     config.save(out)
     out.close()
 
-the_model = None
-def _update_matrix(batch):
-    return the_model._update_matrix(batch)
+SENTINEL = 'STOP'
+def _matrix_worker(input, output, model, k):
+    from multiprocessing import current_process
+    for batch in iter(input.get, SENTINEL):
+        proc = current_process()
+        LOG.info('worker %s (pid=%d) computing update matrix', proc.name, proc.pid)
+        update_mat = model._update_matrix(batch)
+        LOG.info('worker %s (pid=%d) computing update SVD', proc.name, proc.pid)
+        svd = update_mat.svd(k=k)
+        output.put(svd)
 
 k = 200 # FIXME
-num_cpus = 2
-def do_svd(mat):
-    return mat.svd(k=k)
+num_workers = 2
 
 def compute_update_svds(model, batch_size=1000):
-    global the_model
-    the_model = model # yeah, this is ugly. Sorry.
-    from multiprocessing import Pool
-    pool = Pool(num_cpus)
+    from multiprocessing import Process, Queue
     from csc_utils import in_groups_of
 
-    ## First, add all the documents.
-    #model.add_from(url)
+    task_queue = Queue()
+    done_queue = Queue()
 
-    LOG.info('Computing update matrices...')
+    LOG.info('Getting docs list...')
     docs = model.database.list_documents()
-    update_matrices = pool.map(_update_matrix, in_groups_of(batch_size, docs))
-
-    LOG.info('Computing update SVDs...')
-    return pool.map(do_svd, update_matrices)
+    LOG.info('Computing update matrices and SVDs...')
+    LOG.info('- starting workers')
+    for i in range(num_workers):
+        Process(target=_matrix_worker, args=(task_queue, done_queue, model, k)).start()
+    mat_count = 0
+    LOG.info('- getting document texts')
+    for batch in in_groups_of(batch_size, docs):
+        text_batch = [model.get_document_text(docid) for docid in batch]
+        task_queue.put(text_batch)
+        mat_count += 1
+    # Tell workers they can stop when done.
+    for i in range(num_workers): task_queue.put(SENTINEL)
+    LOG.info('Put %d batches of document texts, now awaiting results', mat_count)
+    update_svds = []
+    for i in range(mat_count):
+        update_svds.append(done_queue.get())
+        LOG.info('Got %d of %d SVDs', len(update_svds), mat_count)
+    LOG.info('Done!')
+    return update_svds
 
 def reduce_update_svds(update_svds):
     from csc_utils import in_groups_of

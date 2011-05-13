@@ -179,11 +179,8 @@ class TermDatabase(object):
             return self.term_cache[term]
         else:
             term_entry = self.sql_session.query(Term).get(term)
-            if term_entry:
-                self.term_cache[term] = term_entry
-                return term_entry
-            else:
-                return None
+            self.term_cache[term] = term_entry
+            return term_entry
 
     def _increment_term_count(self, term, value=1, newdoc=False):
         """
