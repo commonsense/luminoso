@@ -748,19 +748,24 @@ class LuminosoModel(object):
         rows = config['num_concepts']
         cols = config['num_axes']
 
-        U, Sigma, _ = background_data.svd(k=cols)
+        if background_data is None:
+            newU = divisi2.DenseMatrix((rows, cols))
+            newSigma = np.zeros((cols,))
+            newU.row_labels = PrioritySet(rows)
+        else:
+            U, Sigma, _ = background_data.svd(k=cols)
 
-        newU = divisi2.DenseMatrix((rows, cols))
-        rows_to_copy = U.shape[0]
-        if rows < rows_to_copy:
-            raise ValueError("num_concepts is too small to fit the "
-                             "existing concepts.")
-        cols_to_copy = min(cols, U.shape[1])
-        newU[:rows_to_copy, :cols_to_copy] = \
-          U[:rows_to_copy, :cols_to_copy]
-        newU.row_labels = U.row_labels
-        newSigma = Sigma[:cols_to_copy]
-        
+            newU = divisi2.DenseMatrix((rows, cols))
+            rows_to_copy = U.shape[0]
+            if rows < rows_to_copy:
+                raise ValueError("num_concepts is too small to fit the "
+                                 "existing concepts.")
+            cols_to_copy = min(cols, U.shape[1])
+            newU[:rows_to_copy, :cols_to_copy] = \
+              U[:rows_to_copy, :cols_to_copy]
+            newU.row_labels = U.row_labels
+            newSigma = Sigma[:cols_to_copy]
+            
         # Make sure that the matrix has a PrioritySet for its row labels.
         _prioritize_labels(newU, rows)
 
