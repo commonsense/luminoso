@@ -803,9 +803,13 @@ class LuminosoModel(object):
         combinedS /= combinedS[0]
         newSigma /= newSigma[0]
         
-        final_updates = [(combinedU, combinedS, combinedU), (newU, newSigma, newU)]
-        LOG.info('reducing blend')
-        blendedU, blendedS, blendedV = reduce_update_svds(final_updates)
+        if background is None:
+            blendedU, blendedS = combinedU, combinedS
+        else:
+            final_updates = [(combinedU, combinedS, combinedU), (newU, newSigma, newU)]
+            LOG.info('reducing blend')
+            blendedU, blendedS, blendedV = reduce_update_svds(final_updates)
+        
         self.u = divisi2.DenseMatrix(
             blendedU[:, :cols],
             row_labels=self.priority
