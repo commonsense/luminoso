@@ -886,22 +886,7 @@ def save_config_file(config, filename):
 
 the_model = None
 def _update_matrix(batch):
-    global the_model
-    nterms, k = the_model.u.shape
-    values, rows, cols = [], [], []
-    for doc_url in batch:
-        for weight, term1, term2 in the_model.document_assoc_updates(doc_url):
-            try:
-                row = the_model.priority.index(term1)
-                col = the_model.priority.index(term2)
-            except KeyError:
-                # Terms fell out of the priorityset.
-                continue
-            values.append(weight)
-            rows.append(row)
-            cols.append(col)
-    return divisi2.SparseMatrix.from_lists(values, rows, cols,
-                                           nrows=nterms, ncols=nterms)
+    return the_model._update_matrix(batch)
 
 k = 200 # FIXME
 num_cpus = 2
@@ -954,9 +939,6 @@ def reduce_update_svds(update_svds):
             todo.append((new_u, new_sigma, new_u))
 
     return todo[0]
-#            # Update the stored model.
-#            self.u = divisi2.DenseMatrix(new_u, self.priority, None)
-#            self.sigma = new_sigma
     
 def run_in_directory(dir, lang='en'):
     """
