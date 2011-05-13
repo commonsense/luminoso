@@ -26,9 +26,9 @@ import logging
 import codecs
 import hashlib, zlib
 try:
-    import json
-except ImportError:
     import simplejson as json
+except ImportError:
+    import json
 LOG = logging.getLogger(__name__)
 
 class StudyExists(Exception):
