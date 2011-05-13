@@ -215,8 +215,12 @@ class LuminosoModel(object):
             connections = list(reader.extract_connections(text))
             term_texts = list(reader.extract_term_texts(text))
             cache = connections, term_texts
-            with open(filename, 'wb') as f:
+            # Atomically overwrite the file (why isn't this in the standard library??)
+            tmp = filename+'_tmp'
+            with open(tmp, 'wb') as f:
                 f.write(zlib.compress(json.dumps(cache), CONNECTION_COMPRESSION_LEVEL))
+            os.rename(tmp, filename)
+
             return cache
     
     def get_connections_for_text(self, text, reader_name=None):
