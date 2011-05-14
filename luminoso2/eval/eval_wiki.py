@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 import numpy as np
 import luminoso2
-from luminoso2.eval.util import diagonal_significance, confusion_matrix
+from luminoso2.eval.util import diagonal_significance, confusion_matrix,\
+    precision_vs_recall
 
 def get_names(model):
     # cut in half for training purposes
@@ -70,8 +71,8 @@ def is_model_good(model, filename=None):
 
 def is_model_confused(model, filename=None):
     names = get_names(model)
-    for study in list(names) + ['Canonical']:
-        model.update_doc_matrix(study)
+    #for study in list(names) + ['Canonical']:
+    #    model.update_doc_matrix(study)
     canonical_fullnames, names, stats, terms, correlation_means = analyze_model(model)
     confusion = confusion_matrix(model, names, canonical_fullnames)
     if filename is not None:
@@ -82,6 +83,12 @@ def is_model_confused(model, filename=None):
     #confusion /= np.sum(confusion, axis=1)
     precision = np.sum(np.diag(confusion)) / np.sum(confusion)
     return confusion, precision
+
+def get_precision_recall(model):
+    names = get_names(model)
+    canonical_basename = model.docs_in_study('Canonical')[0].rsplit('#', 1)[0]
+    canonical_fullnames = [u'%s#%s' % (canonical_basename, canonical) for canonical in names]
+    return precision_vs_recall(model, names, canonical_fullnames)
 
 def multiple_models(model, name='enwiki_post_normalize'):
     import divisi2
