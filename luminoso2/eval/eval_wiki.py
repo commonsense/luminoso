@@ -83,13 +83,13 @@ def is_model_confused(model, filename=None):
     precision = np.sum(np.diag(confusion)) / np.sum(confusion)
     return confusion, precision
 
-def multiple_models(model, name='enwiki_train3'):
+def multiple_models(model, name='enwiki_post_normalize'):
     import divisi2
     background = divisi2.network.conceptnet_assoc('en')
-    assoc_powers = (1.0, 0.25, 4.0)
+    assoc_powers = (1.0,)
     blend_factors = (
-        0.99, 0.95, 0.90, 0.85, 0.80, 0.75, 0.70, 0.65, 0.60, 0.55, 0.50,
-        0.45, 0.40, 0.35, 0.30, 0.25, 0.20, 0.15, 0.10, 0.05, 0.01
+        0.70, 0.30, 0.50, 0.99, 0.01, 0.95, 0.90, 0.85, 0.80, 0.75, 0.65,
+        0.60, 0.55, 0.45, 0.40, 0.35, 0.25, 0.20, 0.15, 0.10, 0.05
     )
     out = open(name+'_confusion.log', 'a')
     for a in assoc_powers:

@@ -542,10 +542,10 @@ class LuminosoModel(object):
                 index = self.priority.index(term)
                 tfidf_weight = weight * self.get_term_idf(term)
                 assoc_weight = np.linalg.norm(self.u.row_named(term))
-                vec[index] = tfidf_weight * assoc_weight / total_weight
+                vec[index] = tfidf_weight / total_weight
         if input_only:
             return vec
-        return divisi2.dot(vec.normalize(), self.assoc)
+        return divisi2.dot(vec, self.assoc).normalize()
 
     def vector_from_text(self, text, reader_name=None, input_only=False):
         """
