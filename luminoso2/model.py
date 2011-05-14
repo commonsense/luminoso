@@ -941,7 +941,7 @@ def _matrix_worker(input, output, model, k):
         output.put(svd)
 
 k = 200 # FIXME
-num_workers = 2
+num_workers = 1
 
 def compute_update_svds(model, batch_size=1000):
     from multiprocessing import Process, Queue

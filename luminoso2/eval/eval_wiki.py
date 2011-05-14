@@ -35,7 +35,7 @@ def plot_alignment(correlation_means, terms, names):
     from matplotlib import pyplot as plt
     plt.yticks(np.arange(len(names))+0.5, names[::-1])
     plt.xticks(np.arange(len(terms))+0.5, terms, rotation='vertical')
-    plt.pcolor(np.flipud(correlation_means / np.sqrt(np.mean(correlation_means*correlation_means, axis=0))[np.newaxis,:]), cmap='hot')
+    plt.pcolor(np.flipud(correlation_means / np.sum(correlation_means, axis=1)[:,np.newaxis]), cmap='hot')
     plt.subplots_adjust(bottom=0.22, left=0.3)
     #plt.clim(-60, 10)
     cbar = plt.colorbar()   #ticks=[-60, -50, -40, -30, -20, -10, 0, 10])
@@ -56,23 +56,42 @@ def wiki_cs1(regen=True):
 
 def is_model_good(model, filename=None):
     names = get_names(model)
-    for study in list(names) + ['Canonical']:
-        model.update_doc_matrix(study)
+    #for study in list(names) + ['Canonical']:
+    #    model.update_doc_matrix(study)
     canonical_fullnames, names, stats, terms, correlation_means = analyze_model(model)
     correlation_means = np.array(correlation_means)
     if filename is not None:
         from matplotlib import pyplot as plt
+        plt.clf()
         plot_alignment(correlation_means, terms, names)
         plt.savefig(filename)
 
     return diagonal_significance(correlation_means)
 
-def multiple_models(model, name='enwiki_again'):
+def is_model_confused(model, filename=None):
+    names = get_names(model)
+    for study in list(names) + ['Canonical']:
+        model.update_doc_matrix(study)
+    canonical_fullnames, names, stats, terms, correlation_means = analyze_model(model)
+    confusion = confusion_matrix(model, names, canonical_fullnames)
+    if filename is not None:
+        from matplotlib import pyplot as plt
+        plt.clf()
+        plot_alignment(confusion, terms, names)
+        plt.savefig(filename)
+    #confusion /= np.sum(confusion, axis=1)
+    precision = np.sum(np.diag(confusion)) / np.sum(confusion)
+    return confusion, precision
+
+def multiple_models(model, name='enwiki_train3'):
     import divisi2
     background = divisi2.network.conceptnet_assoc('en')
-    assoc_powers = (0.0625, 0.125, 0.25, 0.5, 1.0, 2.0, 4.0)
-    blend_factors = (0.1, 0.3, 0.5, 0.7, 0.9)
-    out = open(name+'_model.log', 'a')
+    assoc_powers = (1.0, 0.25, 4.0)
+    blend_factors = (
+        0.99, 0.95, 0.90, 0.85, 0.80, 0.75, 0.70, 0.65, 0.60, 0.55, 0.50,
+        0.45, 0.40, 0.35, 0.30, 0.25, 0.20, 0.15, 0.10, 0.05, 0.01
+    )
+    out = open(name+'_confusion.log', 'a')
     for a in assoc_powers:
         for b in blend_factors:
             print "running", (a,b)
@@ -81,8 +100,10 @@ def multiple_models(model, name='enwiki_again'):
                 'assoc_power': a
             })
             filename="%s_%s_%s.png" % (name, a, b)
-            sig, pvalue = is_model_good(model, filename)
-            print "%s,%s,%s,%s" % (a, b, sig, pvalue)
-            print >> out, "%s,%s,%s,%s" % (a, b, sig, pvalue)
+            conf, precision = is_model_confused(model, filename)
+            separability, pvalue = is_model_good(model, 'sep_'+filename)
+            print "%s,%s,%s,%s" % (a, b, precision, separability)
+            print >> out, "%s,%s,%s,%s" % (a, b, precision, separability)
+            out.flush()
     out.close()
 
