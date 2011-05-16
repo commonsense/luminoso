@@ -173,6 +173,8 @@ class LuminosoModel(object):
         - tags: (key, value) tuples representing tags
         """
         LOG.info("Reading document: %r" % doc['url'])
+        if reader_name is None:
+            reader_name = self.config['reader']
         text = doc['text']
         tags = doc.get('tags', [])
         doc_terms = []
