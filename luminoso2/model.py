@@ -48,11 +48,6 @@ class LuminosoModel(object):
     updated incrementally to take new data into account, which is how
     Luminoso learns new domain-specific knowledge.
     """
-    # Flags that control things we've been fiddling with.
-    ignore_negation = True
-    ignore_bigrams = True
-
-
     CONFIG_FILENAME = 'luminoso.cfg'
     DATA_FILENAME = 'data.pkl'
     DB_FILENAME = 'terms.sqlite'
@@ -253,7 +248,7 @@ class LuminosoModel(object):
         """
         connections = self.get_connections_for_text(self.get_document_text(docid))
 
-        if self.ignore_negation:
+        if self.config.ignore_negation:
             connections = [(abs(weight), term1, term2)
                            for (weight, term1, term2) in connections]
         return connections
@@ -265,7 +260,7 @@ class LuminosoModel(object):
         """
         doc = self.database.get_document(docid)
         terms = json.loads(doc.terms)
-        if self.ignore_negation:
+        if self.config.ignore_negation:
             terms = [(term, abs(weight)) for (term, weight) in terms]
         return terms
     
@@ -298,7 +293,7 @@ class LuminosoModel(object):
 
         Returns the index of the term in the set.
         """
-        if self.ignore_bigrams and ' ' in term:
+        if self.config.ignore_bigrams and ' ' in term:
             return None
         index = self.priority.add(term, priority)
         return index
@@ -780,7 +775,7 @@ class LuminosoModel(object):
         from sqlalchemy.sql.expression import desc
         query = self.database.sql_session.query(Term)\
                    .filter(Term.term != '*')
-        if self.ignore_bigrams:
+        if self.config.ignore_bigrams:
             query = query.filter(~Term.term.like('% %'))
         query = query.order_by(desc(Term.relevance))
 
@@ -887,7 +882,10 @@ _default_config = dict(
     reader = 'simplenlp.en',
     iteration = 0,
     sample_frac = 1.0,
-    blend_factor = 1.0)
+    blend_factor = 1.0,
+    ignore_negation = True,
+    ignore_bigrams = True,
+)
 
 def _set_defaults(config):
     "The default configuration for new studies."
