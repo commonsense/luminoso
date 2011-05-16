@@ -107,6 +107,7 @@ class LuminosoModel(object):
             self.config = Config(
               open(self.filename_in_dir(LuminosoModel.CONFIG_FILENAME))
             )
+            _set_defaults(self.config)
         else:
             raise IOError("This model is missing a config file.")
 
@@ -694,7 +695,8 @@ class LuminosoModel(object):
         Make a LuminosoModel that starts from an empty matrix.
         """
         if config is None:
-            config = _default_config()
+            config = Config()
+            _set_defaults(config)
         mat = divisi2.DenseMatrix((config['num_concepts'], config['num_axes']))
         diag_S = np.zeros(config['num_axes'])
         model = LuminosoModel.make(model_dir, (mat, diag_S), config)
@@ -723,7 +725,8 @@ class LuminosoModel(object):
         for some language.
         """
         if config is None:
-            config = _default_config()
+            config = Config()
+            _set_defaults(config)
             config['reader'] = 'simplenlp.'+lang
         if os.access(model_dir, os.F_OK):
             raise StudyExists("The model directory %r already exists." % model_dir)
@@ -878,16 +881,19 @@ class CanonicalStats(object):
         return unicode(self.as_dict)
 
 
-def _default_config():
+_default_config = dict(
+    num_concepts = 100000,
+    num_axes = 100,
+    reader = 'simplenlp.en',
+    iteration = 0,
+    sample_frac = 1.0,
+    blend_factor = 1.0)
+
+def _set_defaults(config):
     "The default configuration for new studies."
-    config = Config()
-    config['num_concepts'] = 100000
-    config['num_axes'] = 100
-    config['reader'] = 'simplenlp.en'
-    config['iteration'] = 0
-    config['sample_frac'] = 1.0
-    config['blend_factor'] = 1.0
-    return config
+    for k, v in _default_config.iteritems():
+        if k not in config:
+            config[k] = v
 
 def _prioritize_labels(mat, num_concepts):
     """
