@@ -3,6 +3,7 @@ import luminoso2
 from luminoso2.model import LuminosoModel
 import tempfile, shutil
 from nose.tools import assert_equal
+from nose.plugins.attrib import attr
 import logging
 logging.basicConfig()
 from luminoso2.whereami import get_project_filename
@@ -15,6 +16,7 @@ def setup_module():
 def teardown_module():
     shutil.rmtree(TEMPDIR)
 
+@attr('ja')
 def test_japanese():
     japanese = luminoso2.make_japanese(TEMPDIR+'/japanese')
     assoc1 = japanese.assoc.entry_named(u'猫', u'犬')
