@@ -883,7 +883,7 @@ _default_config = dict(
     iteration = 0,
     sample_frac = 1.0,
     blend_factor = 1.0,
-    ignore_negation = True,
+    ignore_negation = False,
     ignore_bigrams = True,
 )
 

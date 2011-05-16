@@ -2,7 +2,7 @@
 import luminoso2
 from luminoso2.model import LuminosoModel
 import tempfile, shutil
-from nose.tools import assert_equal
+from nose.tools import eq_
 from nose.plugins.attrib import attr
 import logging
 logging.basicConfig()
@@ -47,14 +47,14 @@ def test_small():
             'reader': 'simplenlp.en'
         }
     )
-    assert model.config['num_concepts'] == 3
-    assert model.index_term('a', 2) == 0
-    assert model.index_term('b', 1) == 1
-    assert model.index_term('c', 3) == 2
-    assert model.index_term('d', 4) == 1
-    assert model.index_term('e', 0) == 0
-    assert model.index_term('e', 0) == 0
-    assert model.priority.items == ['e', 'd', 'c']
+    eq_(model.config['num_concepts'], 3)
+    eq_(model.index_term('a', 2), 0)
+    eq_(model.index_term('b', 1), 1)
+    eq_(model.index_term('c', 3), 2)
+    eq_(model.index_term('d', 4), 1)
+    eq_(model.index_term('e', 0), 0)
+    eq_(model.index_term('e', 0), 0)
+    eq_(model.priority.items, ['e', 'd', 'c'])
 
 def test_read_from_url():
     model = LuminosoModel.make_empty(
@@ -71,11 +71,11 @@ def test_read_from_url():
     tags = model.database.get_document_tags(
       get_project_filename('test/TestDocuments/happytest.txt')
     )
-    assert tags == [(u'study', u'test')]
+    eq_(sorted(tags), [(u'study', u'test')])
     terms = model.get_document_terms(
       get_project_filename('test/TestDocuments/happytest.txt')
     )
-    assert terms == [('happy', 1.0), ('sad', -0.5)]
+    eq_(sorted(terms), [('happy', 1.0), ('sad', -0.5)])
 
 def test_english():
     english = luminoso2.make_english(TEMPDIR+'/english')
