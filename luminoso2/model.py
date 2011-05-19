@@ -580,6 +580,10 @@ class LuminosoModel(object):
         to get the most associated terms.
         """
         return divisi2.dot(self.assoc, vec)
+
+    def term_association(self, term1, term2):
+        return divisi2.dot(self.assoc.row_named(term1),
+                           self.assoc.row_named(term2))
     
     def domain_terms_similar_to_vector(self, vec):
         """

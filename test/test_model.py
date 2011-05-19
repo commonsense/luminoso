@@ -19,8 +19,8 @@ def teardown_module():
 @attr('ja')
 def test_japanese():
     japanese = luminoso2.make_japanese(TEMPDIR+'/japanese')
-    assoc1 = japanese.assoc.entry_named(u'猫', u'犬')
-    assoc2 = japanese.assoc.entry_named(u'猫', u'好き')
+    assoc1 = japanese.term_association(u'猫', u'犬')
+    assoc2 = japanese.term_association(u'猫', u'好き')
     assert assoc1 > 0.3
     neko = {
         'url': u'猫.txt',
@@ -32,9 +32,8 @@ def test_japanese():
         'name': u'犬',
         'text': u'犬が好きです',        
     }
-    doc_func = lambda: [neko, inu]
-    japanese.add_batch(doc_func, study=u'テスト', learn_iterations=5)
-    assoc3 = japanese.assoc.entry_named(u'猫', u'好き')
+    japanese.add_batch([neko, inu], study=u'テスト', learn=True)
+    assoc3 = japanese.term_association(u'猫', u'好き')
     assert assoc3 > assoc2
 
 def test_small():
@@ -75,19 +74,20 @@ def test_read_from_url():
     terms = model.get_document_terms(
       get_project_filename('test/TestDocuments/happytest.txt')
     )
-    eq_(sorted(terms), [('happy', 1.0), ('sad', -0.5)])
+    eq_(sorted(map(tuple, terms)), [(u'happy', 1.0), (u'sad', -0.5)])
 
 def test_english():
     english = luminoso2.make_english(TEMPDIR+'/english')
-    assert english.assoc.entry_named('cat', 'dog') > 0.5
-    err1 = english.learn_assoc(1, 'foo', 'bar')
-    assoc1 = english.assoc.entry_named('foo', 'bar')
-    err2 = english.learn_assoc(1, 'foo', 'bar')
-    assoc2 = english.assoc.entry_named('foo', 'bar')
-    # after seeing the same example twice, error should decrease
-    assert err2 < err1
-    # after seeing the same example twice, association should increase
-    assert assoc2 > assoc1
+    assoc_before = english.term_association('cat', 'dog')
+    assert assoc_before > 0.5
+    doc1 = dict(url='doc1.txt', name='doc1',
+                text='cats and dogs')
+    doc2 = dict(url='doc2.txt', name='doc2',
+                text='cats. dogs.')
+    english.add_batch([doc1, doc2], learn=True)
+    assoc_after = english.term_association('cat', 'dog')
+    # after seeing the new documents, association should increase
+    assert assoc_after > assoc_before
 
 if __name__ == '__main__':
     import cProfile
