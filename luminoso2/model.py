@@ -372,8 +372,9 @@ class LuminosoModel(object):
 
     def add_batch(self, batch, study=None, learn=False):
         """
-        Add a batch of documents from some source, a `stream_func` that
-        when called returns an iterator over the documents.
+        Add a batch of documents. If `study` is specified, add them to
+        that study. If `learn` is True, update the association model
+        to account for those new documents.
         """
         fulltext_cache = {}
 
