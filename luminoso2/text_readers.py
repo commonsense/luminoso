@@ -144,10 +144,11 @@ class SimpleNLPReader(TextReader):
         """
         Determine which terms appear near each other in the given document,
         and output a generator of (weight, term1, term2) connections that
-        can be used to train a LuminosoSpace.
+        can be used to train a LuminosoModel.
 
-        The special term named `DOCUMENT` is used to mark the strength with
-        which each term appears in the document itself.
+        The special term named `DOCUMENT` is used to mark the strength
+        with which each term appears in the document itself. Tags are
+        handled this way, for example.
         """
         tokens = self.extract_tokens(text)
         if self.HEAD_DIRECTION == 'right':
