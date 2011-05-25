@@ -2,6 +2,7 @@ import luminoso2
 from luminoso2.model import LuminosoModel
 import tempfile, shutil
 from nose.tools import assert_equal
+from luminoso2.text_readers import DOCUMENT, TAG
 
 TEMPDIR = None
 
@@ -40,3 +41,6 @@ def test_tags():
     assert_equal(sorted(themodel.database.get_document_tags('#test1')),
                  sorted(themodel.database.get_document_tags('#test2')))
     
+    connections = list(themodel.get_document_connections('#test1'))
+    assert (0, DOCUMENT, (TAG, 'foo', None)) in connections
+

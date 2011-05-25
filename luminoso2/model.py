@@ -228,6 +228,11 @@ class LuminosoModel(object):
         Get connections for the given text, using the given reader.
         '''
         connections, term_texts = self._get_cache_for_text(text, reader_name)
+        for idx, connection in enumerate(connections):
+            c2 = connection[2]
+            if isinstance(c2, list):
+                connection[2] = tuple(c2)
+            connections[idx] = tuple(connection)
         return connections
 
     def get_term_texts_for_text(self, text, reader_name=None):
