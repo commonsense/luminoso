@@ -193,9 +193,7 @@ class SimpleNLPReader(TextReader):
                 
                 for term in active_terms:
                     for prev, prev_weight in memory:
-                        # Currently, this will associate each term with
-                        # itself, in addition to previous terms.
-                        # Is this the right way to do that?
+                        if prev == term: continue
                         yield (weight*prev_weight, prev, term)
     
     def extract_term_texts(self, text):
