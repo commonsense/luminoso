@@ -63,7 +63,7 @@ class SimpleNLPReader(TextReader):
     # include English and Japanese punctuation mixed together
     PUNCT = [u'.', u'?', u'!', u':', u'…', u'—', u'、', u'。',
              u'「', u'」', u'『', u'』', u'【', u'】', u'〖', u'〗',
-             u'？', u'！']
+             u'？', u'！', u',', u'、']
 
     # punctuation that has to appear as the entire token to count
     # (so we don't accidentally treat "'s" as punctuation, for example)
