@@ -437,7 +437,10 @@ class LuminosoModel(object):
 
         FIXME: this filename may conflict with other things like 'tags'.
         """
-        docs = self.docs_in_study(study_name)
+        if study_name == 'all':
+            docs = self.database.all_documents()
+        else:
+            docs = self.docs_in_study(study_name)
         npmat = np.zeros((len(docs), self.config['num_axes']))
         dmat = divisi2.DenseMatrix(npmat, row_labels=docs)
         for docid in docs:
@@ -490,7 +493,7 @@ class LuminosoModel(object):
         else:
             return divisi2.load(self.filename_in_dir('tags.dmat'))
 
-    def export_svdview(self, study_name='all', num=10000):
+    def export_svdview(self, study_name='all'):
         from divisi2.export_svdview import write_packed
         def denormalize(concept_text):
             doc = self.database.get_document(concept_text)
@@ -500,17 +503,7 @@ class LuminosoModel(object):
                 return concept_text
                 #return self.database.get_term_text(concept_text)
         
-        top_terms = [term.term for term in self.database.top_terms(num)]
-        num = len(top_terms)
-        term_mat = divisi2.DenseMatrix(
-          np.zeros((num, self.config['num_axes'])),
-          row_labels=top_terms
-        )
-        for i in xrange(num):
-            term = top_terms[i]
-            term_mat[i, :] = self.u[self.priority.index(term)]
-
-        mat = term_mat.concatenate(self.get_doc_matrix(study_name))
+        mat = self.assoc.concatenate(self.get_doc_matrix(study_name))
         write_packed(mat, self.filename_in_dir(study_name), denormalize)
 
     def spectrally_associate(self, vec):

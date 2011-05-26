@@ -9,7 +9,8 @@ def get_names(model):
     names = [value for tag, value in model.database.all_tags()
              if tag == u'study' and value != 'Canonical' and value != 'FA'
              and value != u'総記']
-    return names[::2]
+    n = len(names)
+    return names[n//2:]
 
 def load_model(model_path, regen_doc_matrices):
     model = luminoso2.load(model_path)
@@ -40,7 +41,7 @@ def plot_alignment(correlation_means, terms, names):
     plt.subplots_adjust(bottom=0.22, left=0.3)
     #plt.clim(-60, 10)
     cbar = plt.colorbar()   #ticks=[-60, -50, -40, -30, -20, -10, 0, 10])
-    cbar.set_label('Correlation mean')
+    #cbar.set_label('Correlation mean')
 
 def do_model(path, regen, title, filename):
     model = load_model(path, regen)
@@ -57,8 +58,8 @@ def wiki_cs1(regen=True):
 
 def is_model_good(model, filename=None):
     names = get_names(model)
-    #for study in list(names) + ['Canonical']:
-    #    model.update_doc_matrix(study)
+    for study in list(names) + ['Canonical']:
+        model.update_doc_matrix(study)
     canonical_fullnames, names, stats, terms, correlation_means = analyze_model(model)
     correlation_means = np.array(correlation_means)
     if filename is not None:
@@ -90,13 +91,13 @@ def get_precision_recall(model):
     canonical_fullnames = [u'%s#%s' % (canonical_basename, canonical) for canonical in names]
     return precision_vs_recall(model, names, canonical_fullnames)
 
-def multiple_models(model, name='enwiki_post_normalize'):
+def multiple_models(model, name='enwiki_newtrain'):
     import divisi2
     background = divisi2.network.conceptnet_assoc('en')
-    assoc_powers = (1.0,)
+    assoc_powers = (1.0, 2.0, 0.5, 4.0, 0.25, 0.125, 8.0)
     blend_factors = (
-        0.70, 0.30, 0.50, 0.99, 0.01, 0.95, 0.90, 0.85, 0.80, 0.75, 0.65,
-        0.60, 0.55, 0.45, 0.40, 0.35, 0.25, 0.20, 0.15, 0.10, 0.05
+        0.70, 0.30, 0.50, 0.99, 0.01, 0.90, 0.80, 
+        0.60, 0.40, 0.20, 0.10
     )
     out = open(name+'_confusion.log', 'a')
     for a in assoc_powers:
@@ -106,9 +107,9 @@ def multiple_models(model, name='enwiki_post_normalize'):
                 'blend_factor': b,
                 'assoc_power': a
             })
-            filename="%s_%s_%s.png" % (name, a, b)
-            conf, precision = is_model_confused(model, filename)
+            filename="%s_%s_%s.pdf" % (name, a, b)
             separability, pvalue = is_model_good(model, 'sep_'+filename)
+            conf, precision = is_model_confused(model, filename)
             print "%s,%s,%s,%s" % (a, b, precision, separability)
             print >> out, "%s,%s,%s,%s" % (a, b, precision, separability)
             out.flush()
