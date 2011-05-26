@@ -17,6 +17,22 @@ def test_tokenize():
     tokenized = list(reader.extract_tokens('bob, two three. four.'))
     assert_equal(tokenized, [u'bob', u',', u'two', u'three', u'.', u'four', u'.'])
 
+def test_english_connections():
+    reader = get_reader('simplenlp.en')
+    connections = list(reader.extract_connections(
+      u'This is good, and it is not bad. Note that this is positive.'
+    ))
+    pos_doc_terms = [term2 for weight, term1, term2 in connections
+                           if term1 == DOCUMENT and weight > 0]
+    neg_doc_terms = [term2 for weight, term1, term2 in connections
+                           if term1 == DOCUMENT and weight < 0]
+    assert u'good' in pos_doc_terms
+    assert u'bad' in neg_doc_terms
+    assert u'note' in pos_doc_terms
+    assert u'positive' in pos_doc_terms
+    assert u',' not in pos_doc_terms
+    assert u',' not in neg_doc_terms
+
 @raises(KeyError)
 def test_no_reader():
     get_reader('simplenlp.foo')
