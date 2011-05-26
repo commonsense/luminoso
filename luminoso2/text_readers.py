@@ -144,10 +144,11 @@ class SimpleNLPReader(TextReader):
         """
         Determine which terms appear near each other in the given document,
         and output a generator of (weight, term1, term2) connections that
-        can be used to train a LuminosoSpace.
+        can be used to train a LuminosoModel.
 
-        The special term named `DOCUMENT` is used to mark the strength with
-        which each term appears in the document itself.
+        The special term named `DOCUMENT` is used to mark the strength
+        with which each term appears in the document itself. Tags are
+        handled this way, for example.
         """
         tokens = self.extract_tokens(text)
         if self.HEAD_DIRECTION == 'right':
@@ -192,9 +193,7 @@ class SimpleNLPReader(TextReader):
                 
                 for term in active_terms:
                     for prev, prev_weight in memory:
-                        # Currently, this will associate each term with
-                        # itself, in addition to previous terms.
-                        # Is this the right way to do that?
+                        if prev == term: continue
                         yield (weight*prev_weight, prev, term)
     
     def extract_term_texts(self, text):

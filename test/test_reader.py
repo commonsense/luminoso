@@ -1,6 +1,7 @@
 # coding:utf-8
 from luminoso2.text_readers import get_reader, DOCUMENT
 from nose.tools import assert_equal, raises
+from nose.plugins.attrib import attr
 
 def test_simple():
     reader = get_reader('simplenlp.en')
@@ -37,6 +38,7 @@ def test_english_connections():
 def test_no_reader():
     get_reader('simplenlp.foo')
 
+@attr('ja')
 def test_japanese():
     reader = get_reader('simplenlp.ja')
     connections = list(reader.extract_connections(

@@ -48,11 +48,6 @@ class LuminosoModel(object):
     updated incrementally to take new data into account, which is how
     Luminoso learns new domain-specific knowledge.
     """
-    # Flags that control things we've been fiddling with.
-    ignore_negation = True
-    ignore_bigrams = True
-
-
     CONFIG_FILENAME = 'luminoso.cfg'
     DATA_FILENAME = 'data.pkl'
     DB_FILENAME = 'terms.sqlite'
@@ -107,6 +102,7 @@ class LuminosoModel(object):
             self.config = Config(
               open(self.filename_in_dir(LuminosoModel.CONFIG_FILENAME))
             )
+            _set_defaults(self.config)
         else:
             raise IOError("This model is missing a config file.")
 
@@ -173,6 +169,8 @@ class LuminosoModel(object):
         - tags: (key, value) tuples representing tags
         """
         LOG.info("Reading document: %r" % doc['url'])
+        if reader_name is None:
+            reader_name = self.config['reader']
         text = doc['text']
         tags = doc.get('tags', [])
         doc_terms = []
@@ -230,6 +228,11 @@ class LuminosoModel(object):
         Get connections for the given text, using the given reader.
         '''
         connections, term_texts = self._get_cache_for_text(text, reader_name)
+        for idx, connection in enumerate(connections):
+            c2 = connection[2]
+            if isinstance(c2, list):
+                connection[2] = tuple(c2)
+            connections[idx] = tuple(connection)
         return connections
 
     def get_term_texts_for_text(self, text, reader_name=None):
@@ -250,7 +253,7 @@ class LuminosoModel(object):
         """
         connections = self.get_connections_for_text(self.get_document_text(docid))
 
-        if self.ignore_negation:
+        if self.config.ignore_negation:
             connections = [(abs(weight), term1, term2)
                            for (weight, term1, term2) in connections]
         return connections
@@ -262,7 +265,7 @@ class LuminosoModel(object):
         """
         doc = self.database.get_document(docid)
         terms = json.loads(doc.terms)
-        if self.ignore_negation:
+        if self.config.ignore_negation:
             terms = [(term, abs(weight)) for (term, weight) in terms]
         return terms
     
@@ -295,7 +298,7 @@ class LuminosoModel(object):
 
         Returns the index of the term in the set.
         """
-        if self.ignore_bigrams and ' ' in term:
+        if self.config.ignore_bigrams and ' ' in term:
             return None
         index = self.priority.add(term, priority)
         return index
@@ -374,8 +377,9 @@ class LuminosoModel(object):
 
     def add_batch(self, batch, study=None, learn=False):
         """
-        Add a batch of documents from some source, a `stream_func` that
-        when called returns an iterator over the documents.
+        Add a batch of documents. If `study` is specified, add them to
+        that study. If `learn` is True, update the association model
+        to account for those new documents.
         """
         fulltext_cache = {}
 
@@ -575,6 +579,10 @@ class LuminosoModel(object):
         to get the most associated terms.
         """
         return divisi2.dot(self.assoc, vec)
+
+    def term_association(self, term1, term2):
+        return divisi2.dot(self.assoc.row_named(term1),
+                           self.assoc.row_named(term2))
     
     def domain_terms_similar_to_vector(self, vec):
         """
@@ -685,7 +693,8 @@ class LuminosoModel(object):
         Make a LuminosoModel that starts from an empty matrix.
         """
         if config is None:
-            config = _default_config()
+            config = Config()
+            _set_defaults(config)
         mat = divisi2.DenseMatrix((config['num_concepts'], config['num_axes']))
         diag_S = np.zeros(config['num_axes'])
         model = LuminosoModel.make(model_dir, (mat, diag_S), config)
@@ -714,7 +723,8 @@ class LuminosoModel(object):
         for some language.
         """
         if config is None:
-            config = _default_config()
+            config = Config()
+            _set_defaults(config)
             config['reader'] = 'simplenlp.'+lang
         if os.access(model_dir, os.F_OK):
             raise StudyExists("The model directory %r already exists." % model_dir)
@@ -768,7 +778,7 @@ class LuminosoModel(object):
         from sqlalchemy.sql.expression import desc
         query = self.database.sql_session.query(Term)\
                    .filter(Term.term != '*')
-        if self.ignore_bigrams:
+        if self.config.ignore_bigrams:
             query = query.filter(~Term.term.like('% %'))
         query = query.order_by(desc(Term.relevance))
 
@@ -869,16 +879,22 @@ class CanonicalStats(object):
         return unicode(self.as_dict)
 
 
-def _default_config():
+_default_config = dict(
+    num_concepts = 100000,
+    num_axes = 100,
+    reader = 'simplenlp.en',
+    iteration = 0,
+    sample_frac = 1.0,
+    blend_factor = 1.0,
+    ignore_negation = False,
+    ignore_bigrams = True,
+)
+
+def _set_defaults(config):
     "The default configuration for new studies."
-    config = Config()
-    config['num_concepts'] = 100000
-    config['num_axes'] = 100
-    config['reader'] = 'simplenlp.en'
-    config['iteration'] = 0
-    config['sample_frac'] = 1.0
-    config['blend_factor'] = 1.0
-    return config
+    for k, v in _default_config.iteritems():
+        if k not in config:
+            config[k] = v
 
 def _prioritize_labels(mat, num_concepts):
     """
