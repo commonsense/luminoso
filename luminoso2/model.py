@@ -13,6 +13,7 @@ Overall design:
 from __future__ import with_statement   # for Python 2.5 support
 import divisi2
 import numpy as np
+from csc_utils.io import write_to_file_atomically
 from divisi2.fileIO import load_pickle, save_pickle
 from divisi2.ordered_set import PrioritySet
 from luminoso2.svdupdate import general_svd_update
@@ -25,7 +26,6 @@ from config import Config
 import logging
 import codecs
 import hashlib, zlib
-import random
 try:
     import simplejson as json
 except ImportError:
@@ -214,13 +214,7 @@ class LuminosoModel(object):
             connections = list(reader.extract_connections(text))
             term_texts = list(reader.extract_term_texts(text))
             cache = connections, term_texts
-            # Atomically overwrite the file (why isn't this in the standard library??)
-            # Choose a random tempfile name because another process may be trying to do the same thing.
-            tmp = '%s_tmp_%d' % (filename, random.randrange(1000))
-            with open(tmp, 'wb') as f:
-                f.write(zlib.compress(json.dumps(cache), CONNECTION_COMPRESSION_LEVEL))
-            os.rename(tmp, filename)
-
+            write_to_file_atomically(filename, zlib.compress(json.dumps(cache), CONNECTION_COMPRESSION_LEVEL))
             return cache
     
     def get_connections_for_text(self, text, reader_name=None):
