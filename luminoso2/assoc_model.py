@@ -31,6 +31,10 @@ class AssocModel(object):
         assert state['version'] == 0
         self.__init__(state['u'], state['sigma'], state['v'])
 
+    @property
+    def k(self):
+        return len(self.sigma)
+
     @classmethod
     def from_matrix(cls, mat, k):
         '''
