@@ -2,15 +2,15 @@ import divisi2
 import numpy as np
 from luminoso2.svdupdate import general_svd_update
 
-class AssocModel(object):
+class AssocSpace(object):
     '''
-    An AssocModel projects terms into a vector space shaped by their
+    An AssocSpace projects terms into a vector space shaped by their
     associations. It can also update that vector space to account for
     new term association evidence.
     '''
     def __init__(self, u, sigma, v=None):
         '''
-        Creates an AssocModel from the `U` (and possibly `V`) matrices
+        Creates an AssocSpace from the `U` (and possibly `V`) matrices
         and the vector of singular values `sigma`.
         '''
         if v is None: v = u # symmetric hack
@@ -38,7 +38,7 @@ class AssocModel(object):
     @classmethod
     def from_matrix(cls, mat, k):
         '''
-        Creates an AssocModel with dimensionality `k` from a matrix of
+        Creates an AssocSpace with dimensionality `k` from a matrix of
         new associations `mat`.
         '''
         u, s, v = mat.svd(k=k)
@@ -96,7 +96,7 @@ class AssocModel(object):
 
     def merged_with(self, other):
         '''
-        Construct a new AssocModel formed by merging this model with another.
+        Construct a new AssocSpace formed by merging this model with another.
 
         Does not modify the current model.
         '''
@@ -109,6 +109,6 @@ class AssocModel(object):
         # Apply SVD update.
         new_u, new_sigma, new_v = general_svd_update(U, self.sigma, V, A, B, U.shape[1])
 
-        return AssocModel(divisi2.DenseMatrix(new_u, self.labels, None),
-                          new_sigma,
-                          divisi2.DenseMatrix(new_v, self.labels, None))
+        return self.__class__(divisi2.DenseMatrix(new_u, self.labels, None),
+                              new_sigma,
+                              divisi2.DenseMatrix(new_v, self.labels, None))

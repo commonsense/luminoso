@@ -20,7 +20,7 @@ from luminoso2.svdupdate import general_svd_update
 from luminoso2.term_database import TermDatabase, _BIG
 from luminoso2.text_readers import get_reader, DOCUMENT, TAG
 from luminoso2.document_handlers import handle_url
-from luminoso2.assoc_model import AssocModel
+from luminoso2.assoc_space import AssocSpace
 import os
 import sys
 from config import Config
@@ -55,13 +55,13 @@ class LuminosoModel(object):
     CONNECTIONS_DIR = 'connections_cache'
     _update_k = 100
 
-    def __init__(self, model_dir, assoc_model=None):
+    def __init__(self, model_dir, assoc_space=None):
         """
         A LuminosoModel is constructed from `dir`, a path to a directory.
         This directory will contain saved versions of various matrices, as
         well as a SQLite database of terms and documents.
 
-        assoc_model, if passed, is an AssocModel; otherwise it's loaded from a pickle.
+        assoc_space, if passed, is an AssocSpace; otherwise it's loaded from a pickle.
         """
         if not isinstance(model_dir, unicode):
             # Ensure that paths are unicode.
@@ -72,10 +72,10 @@ class LuminosoModel(object):
                           % model_dir)
         self.dir = model_dir
         self._load_config()
-        if assoc_model:
-            self._set_assoc_model(assoc_model)
+        if assoc_space:
+            self._set_assoc_space(assoc_space)
         else:
-            self._load_assoc_model()
+            self._load_assoc_space()
         self.database = TermDatabase(
           self.filename_in_dir(LuminosoModel.DB_FILENAME)
         )
@@ -125,30 +125,30 @@ class LuminosoModel(object):
         json.dump(stats.as_dict(), out, indent=2, ensure_ascii=False)
         out.close()
 
-    def _load_assoc_model(self):
-        "Load the AssocModel from a file."
-        assoc_model = load_pickle(
+    def _load_assoc_space(self):
+        "Load the AssocSpace from a file."
+        assoc_space = load_pickle(
             self.filename_in_dir(LuminosoModel.DATA_FILENAME)
             )
-        self._set_assoc_model(assoc_model)
+        self._set_assoc_space(assoc_space)
 
-    def _set_assoc_model(self, assoc_model):
-        self.assoc_model = assoc_model
+    def _set_assoc_space(self, assoc_space):
+        self.assoc_space = assoc_space
         self.save_data()
-        self.priority = self.assoc_model.labels
+        self.priority = self.assoc_space.labels
         assert isinstance(self.priority, PrioritySet)
         self.priority.listen_for_drops(self.on_drop)
 
     def save_data(self):
         "Save the model data to a file."
-        save_pickle(self.assoc_model,
+        save_pickle(self.assoc_space,
                     self.filename_in_dir(LuminosoModel.DATA_FILENAME))
     
     def on_drop(self, index, key):
         """
         Handle when a key falls out of the PrioritySet.
         """
-        self.assoc_model.on_drop(index, key)
+        self.assoc_space.on_drop(index, key)
 
     def add_document(self, doc, reader_name=None):
         """
@@ -350,7 +350,7 @@ class LuminosoModel(object):
     add_from_url = add_from
 
     def _update_matrix(self, batch_texts):
-        nterms, k = self.assoc_model.u.shape
+        nterms, k = self.assoc_space.u.shape
         values, rows, cols = [], [], []
         for text in batch_texts:
             for weight, term1, term2 in self.text_assoc_updates(text):
@@ -399,10 +399,10 @@ class LuminosoModel(object):
 
             # Compute the SVD of this set of updates.
             LOG.info('Analyzing new associations...')
-            update_model = AssocModel.from_matrix(update_matrix, self._update_k)
+            update_model = AssocSpace.from_matrix(update_matrix, self._update_k)
 
             LOG.info('Updating projection with new associations...')
-            self.assoc_model = self.assoc_model.merged_with(update_model)
+            self.assoc_space = self.assoc_space.merged_with(update_model)
 
         # Finally, update the full texts of the terms we saw.
         LOG.info("Updating full texts")
@@ -490,7 +490,7 @@ class LuminosoModel(object):
                 return concept_text
                 #return self.database.get_term_text(concept_text)
         
-        mat = self.assoc_model.assoc.concatenate(self.get_doc_matrix(study_name))
+        mat = self.assoc_space.assoc.concatenate(self.get_doc_matrix(study_name))
         write_packed(mat, self.filename_in_dir(study_name), denormalize)
 
     def vector_from_tag(self, tag, value, input_only=False):
@@ -511,7 +511,7 @@ class LuminosoModel(object):
         Get a category vector representing the given set of weighted terms,
         expressed as (term, weight) tuples. This will apply TF-IDF weighting.
         """
-        return self.assoc_model.vector_from_terms(
+        return self.assoc_space.vector_from_terms(
             self.apply_tfidf_weights(terms),
             input_only=input_only)
 
@@ -549,10 +549,10 @@ class LuminosoModel(object):
         associated terms. You can run the `top_items()` method of this vector
         to get the most associated terms.
         """
-        return self.assoc_model.terms_similar_to_vector(vec)
+        return self.assoc_space.terms_similar_to_vector(vec)
 
     def term_association(self, term1, term2):
-        return self.assoc_model.assoc_between_two_terms(term1, term2)
+        return self.assoc_space.assoc_between_two_terms(term1, term2)
     
     def domain_terms_similar_to_vector(self, vec):
         """
@@ -620,17 +620,17 @@ class LuminosoModel(object):
         return "<LuminosoModel: %r>" % self.dir
 
     @staticmethod
-    def make(model_dir, assoc_model, config):
+    def make(model_dir, assoc_space, config):
         """
         Make a new LuminosoModel in the (nonexistent) directory `dir`,
-        with initial AssocModel `assoc_model`.
+        with initial AssocSpace `assoc_space`.
         """
         # Adjust the size of the matrix to match the config, if necessary.
         if os.access(model_dir, os.F_OK):
             raise StudyExists("The model directory %r already exists." % model_dir)
         rows = config['num_concepts']
         cols = config['num_axes']
-        U, Sigma = assoc_model.u, assoc_model.sigma
+        U, Sigma = assoc_space.u, assoc_space.sigma
         if U.shape != (rows, cols):
             dmat = divisi2.DenseMatrix((rows, cols))
             rows_to_copy = U.shape[0]
@@ -654,7 +654,7 @@ class LuminosoModel(object):
         save_config_file(config, config_file)
 
         # Now load the model from that directory and return it.
-        model = LuminosoModel(model_dir, AssocModel(dmat, Sigma))
+        model = LuminosoModel(model_dir, AssocSpace(dmat, Sigma))
         return model
 
     @staticmethod
@@ -667,7 +667,7 @@ class LuminosoModel(object):
             _set_defaults(config)
         mat = divisi2.DenseMatrix((config['num_concepts'], config['num_axes']))
         diag_S = np.zeros(config['num_axes'])
-        model = LuminosoModel.make(model_dir, AssocModel(mat, diag_S), config)
+        model = LuminosoModel.make(model_dir, AssocSpace(mat, diag_S), config)
         return model
 
     @staticmethod
@@ -700,9 +700,9 @@ class LuminosoModel(object):
             raise StudyExists("The model directory %r already exists." % model_dir)
         LOG.info("Making common sense matrix")
         assoc = divisi2.network.conceptnet_assoc(lang)
-        assoc_model = AssocModel.from_matrix(assoc.normalize_all(), k=100)
+        assoc_space = AssocSpace.from_matrix(assoc.normalize_all(), k=100)
         
-        model = LuminosoModel.make(model_dir, assoc_model, config)
+        model = LuminosoModel.make(model_dir, assoc_space, config)
         model.config['iteration'] = 1000
         return model
 
