@@ -44,6 +44,12 @@ class AssocSpace(object):
         u, s, v = mat.svd(k=k)
         return cls(u, s, v)
 
+    def truncated_to(self, k):
+        '''
+        Returns a copy of the space truncated to k dimensions.
+        '''
+        return self.__class__(self.u[:,:k], self.sigma[:k], self.v[:,:k])
+
     def on_drop(self, index, key):
         """
         Handle when a key falls out of the PrioritySet.

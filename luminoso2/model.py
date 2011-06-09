@@ -37,6 +37,7 @@ class StudyExists(Exception):
     pass
 
 CONNECTION_COMPRESSION_LEVEL = 2
+LUMINOSO_ENVIRONMENT_DIR = '~/.luminoso'
 
 class LuminosoModel(object):
     """
@@ -698,12 +699,9 @@ class LuminosoModel(object):
             config['reader'] = 'simplenlp.'+lang
         if os.access(model_dir, os.F_OK):
             raise StudyExists("The model directory %r already exists." % model_dir)
-        LOG.info("Making common sense matrix")
-        assoc = divisi2.network.conceptnet_assoc(lang)
-        assoc_space = AssocSpace.from_matrix(assoc.normalize_all(), k=100)
+        assoc_space = get_commonsense_assoc(lang, k=100)
         
         model = LuminosoModel.make(model_dir, assoc_space, config)
-        model.config['iteration'] = 1000
         return model
 
     def recompute(self, background_data, newconfig=None, partial=False):
@@ -906,6 +904,39 @@ def save_config_file(config, filename):
     out = open(filename, 'w')
     config.save(out)
     out.close()
+
+def get_commonsense_assoc(lang, k):
+    """
+    Load or create the AssocSpace for ConceptNet in the given
+    language. Truncate it to dimensionality k.
+    """
+    assert isinstance(lang, basestring) and '/' not in lang
+    cache_dir = os.path.join(os.path.expanduser(LUMINOSO_ENVIRONMENT_DIR), 'assoc_spaces')
+    cache_file = os.path.join(cache_dir, lang)
+    if os.path.exists(cache_file):
+        try:
+            assoc_space = load_pickle(cache_file)
+        except Exception:
+            os.remove(cache_file)
+        else:
+            if assoc_space.k > k:
+                return assoc_space.truncated_to(k)
+            elif assoc_space.k == k:
+                return assoc_space
+
+    # If we get here, space didn't exist or was too small.
+    LOG.info("Making common sense space for lang=%s", lang)
+    assoc = divisi2.network.conceptnet_assoc(lang)
+    assoc_space = AssocSpace.from_matrix(assoc.normalize_all(), k=k)
+
+    # For now, be conservative: only save the cache if the cache
+    # directory already exists.
+    if os.path.exists(cache_dir):
+        LOG.info("Saving cached common sense space.")
+        save_pickle(assoc_space, cache_file)
+
+    return assoc_space
+
 
 SENTINEL = 'STOP'
 def _matrix_worker(input, output, model, k):
