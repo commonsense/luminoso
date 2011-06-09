@@ -626,9 +626,9 @@ class LuminosoModel(object):
         Make a new LuminosoModel in the (nonexistent) directory `dir`,
         with initial AssocSpace `assoc_space`.
         """
-        # Adjust the size of the matrix to match the config, if necessary.
         if os.access(model_dir, os.F_OK):
             raise StudyExists("The model directory %r already exists." % model_dir)
+        # Adjust the size of the matrix to match the config, if necessary.
         rows = config['num_concepts']
         cols = config['num_axes']
         U, Sigma = assoc_space.u, assoc_space.sigma
