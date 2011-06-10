@@ -16,7 +16,6 @@ import numpy as np
 from csc_utils.io import write_to_file_atomically
 from divisi2.fileIO import load_pickle, save_pickle
 from divisi2.ordered_set import PrioritySet
-from luminoso2.svdupdate import general_svd_update
 from luminoso2.term_database import TermDatabase, _BIG
 from luminoso2.text_readers import get_reader, DOCUMENT, TAG
 from luminoso2.document_handlers import handle_url
@@ -693,62 +692,36 @@ class LuminosoModel(object):
         if os.access(model_dir, os.F_OK):
             raise StudyExists("The model directory %r already exists." % model_dir)
         assoc_space = get_commonsense_assoc(lang, k=100)
-        
-        model = LuminosoModel.make(model_dir, assoc_space, config)
-        return model
+        return LuminosoModel.make(model_dir, assoc_space, config)
 
     def recompute(self, background_data, newconfig=None, partial=False):
         """
         Re-learn a model with new parameters or new background knowledge,
         given its existing term database.
 
-        TODO: un-duplicate code between this and .make
+        background_data is an AssocSpace.
         """
         config = self.config
         if newconfig is not None:
             for key, value in newconfig.items():
                 config[key] = value
 
-        rows = config['num_concepts']
-        cols = config['num_axes']
         blend_factor = config.get('blend_factor', 0.5)
-        assoc_power = config.get('assoc_power', 1.0)
 
         if background_data is None:
-            newU = divisi2.DenseMatrix((rows, cols))
-            newSigma = np.zeros((cols,))
-            newU.row_labels = PrioritySet(rows)
-        else:
-            U, Sigma, _ = background_data.svd(k=cols)
+            background_data = AssocSpace.make_empty(config.num_concepts, config.num_axes)
 
-            newU = divisi2.DenseMatrix((rows, cols))
-            rows_to_copy = U.shape[0]
-            if rows < rows_to_copy:
-                raise ValueError("num_concepts is too small to fit the "
-                                 "existing concepts.")
-            cols_to_copy = min(cols, U.shape[1])
-            newU[:rows_to_copy, :cols_to_copy] = \
-              U[:rows_to_copy, :cols_to_copy]
-            newU.row_labels = U.row_labels
-            newSigma = Sigma[:cols_to_copy]
-            
-        # Make sure that the matrix has a PrioritySet for its row labels.
-        _prioritize_labels(newU, rows)
+        # Adjust the size of the matrix to match the config, if necessary.
+        if background_data.n_rows > config.num_concepts:
+            raise ValueError("num_concepts is too small to fit the "
+                             "existing concepts.")
+        # HACK!: Force the assoc_space to be symmetric.
+        background_data.v = background_data.u
+        background_data = background_data.expanded_to(config.num_concepts, config.num_concepts)
 
-        from luminoso2.term_database import Term
-        from sqlalchemy.sql.expression import desc
-        query = self.database.sql_session.query(Term)\
-                   .filter(Term.term != '*')
-        if self.config.ignore_bigrams:
-            query = query.filter(~Term.term.like('% %'))
-        query = query.order_by(desc(Term.relevance))
-
-        for termobj in query:
-            newU.row_labels.add(termobj.term, termobj.relevance)
-            if len(newU.row_labels.items) == rows:
-                break
-        
-        self.priority = newU.row_labels
+        labels = self.construct_lexicon(background_data.labels)
+        background_data.set_labels(labels)
+        self.priority = labels
 
         if partial:
             # set partial=True when you already have the unblended.svd file
@@ -761,30 +734,36 @@ class LuminosoModel(object):
             combined_update = reduce_update_svds(updates)
             LOG.info('saving reduced matrix')
             divisi2.save(combined_update, self.filename_in_dir('unblended.svd'))
-        
-        LOG.info('computing blend')
-        # rescale to perform rough blending
-        combinedU, combinedS, combinedV = combined_update
-        combinedS = combinedS / combinedS[0] * (1.0-blend_factor) * assoc_power
-        newSigma = newSigma / newSigma[0] * blend_factor * assoc_power
-        
+
         if background_data is None:
-            blendedU, blendedS = combinedU, combinedS
+            assoc_space = combined_update
         else:
-            final_updates = [(combinedU, combinedS, combinedU), (newU, newSigma, newU)]
-            LOG.info('reducing blend')
-            blendedU, blendedS, blendedV = reduce_update_svds(final_updates)
-        
-        self.u = divisi2.DenseMatrix(
-            blendedU[:, :cols],
-            row_labels=self.priority
-        )
-        self.sigma = blendedS[:cols]
-        self.assoc = self.spectrally_associate(self.u).normalize_rows(offset=0.001)
+            LOG.info('computing blend')
+            assoc_space = background_data.merged_with(combined_update, ((1-blend_factor), blend_factor))
+
+        self.assoc_space = assoc_space
 
         LOG.info('saving final results')
         self.save_config()
         self.save_data()
+
+    def construct_lexicon(self, background_terms):
+        num_concepts = self.config.num_concepts
+        lexicon = _ensure_priorityset(background_terms, num_concepts)
+
+        from luminoso2.term_database import Term
+        from sqlalchemy.sql.expression import desc
+        query = self.database.sql_session.query(Term)\
+                   .filter(Term.term != '*')
+        if self.config.ignore_bigrams:
+            query = query.filter(~Term.term.like('% %'))
+        query = query.order_by(desc(Term.relevance))
+
+        for termobj in query:
+            lexicon.add(termobj.term, termobj.relevance)
+            if len(lexicon.items) == num_concepts:
+                break
+        return lexicon
 
 class CanonicalStats(object):
     def __init__(self, assoc, study_matrix, canonical_matrix):
@@ -939,10 +918,10 @@ def _matrix_worker(input, output, model, k):
     for batch in iter(input.get, SENTINEL):
         proc = current_process()
         LOG.info('worker %s (pid=%d) computing update matrix', proc.name, proc.pid)
-        update_mat = model._update_matrix(batch)
+        update_matrix = model._update_matrix(batch)
         LOG.info('worker %s (pid=%d) computing update SVD', proc.name, proc.pid)
-        svd = update_mat.svd(k=k)
-        output.put(svd)
+        update_space = AssocSpace.from_matrix(update_matrix, k)
+        output.put(update_space)
 
 k = 200 # FIXME
 num_workers = 1
@@ -989,21 +968,8 @@ def reduce_update_svds(update_svds):
                 # Last one.
                 todo.append(pair[0])
                 continue
-
-            # Blend the pair of SVDs.
-            (u_a, s_a, v_a), (u_b, s_b, v_b) = pair
-            
-            # Strip to bare NumPy
-            U = np.asarray(u_a)
-            S = s_a
-            A = np.multiply(np.asarray(u_b), np.asarray(s_b))
-            B = np.asarray(v_b)
-
-            # Compute updated SVD.
-            new_u, new_sigma, _ = general_svd_update(U, S, U, A, B, k)
-
-            todo.append((new_u, new_sigma, new_u))
-
+            a, b = pair
+            todo.append(a.merged_with(b))
     return todo[0]
     
 def run_in_directory(dir, lang='en'):
