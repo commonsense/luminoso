@@ -100,20 +100,30 @@ class AssocSpace(object):
         """
         return divisi2.dot(self.assoc, vec)
 
-    def merged_with(self, other):
+    def merged_with(self, other, weights=None):
         '''
         Construct a new AssocSpace formed by merging this model with another.
-
         Does not modify the current model.
+
+        weights, if provided, is (self_weight, other_weight), the
+        weights applied to each space before merging. By default both
+        are weighted 1.
         '''
+        if weights is None:
+            self_sigma = self.sigma
+            other_sigma = other.sigma
+        else:
+            self_weight, other_weight = weights
+            self_sigma = self.sigma * self_weight
+            other_sigma = other.sigma * other_weight
         # Strip to bare NumPy
         U = np.asarray(self.u)
         V = np.asarray(self.v)
-        A = np.multiply(np.asarray(other.u), np.asarray(other.sigma))
+        A = np.multiply(np.asarray(other.u), np.asarray(other_sigma))
         B = np.asarray(other.v)
 
         # Apply SVD update.
-        new_u, new_sigma, new_v = general_svd_update(U, self.sigma, V, A, B, U.shape[1])
+        new_u, new_sigma, new_v = general_svd_update(U, self_sigma, V, A, B, U.shape[1])
 
         return self.__class__(divisi2.DenseMatrix(new_u, self.labels, None),
                               new_sigma,
