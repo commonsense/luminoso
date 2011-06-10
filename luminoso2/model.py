@@ -16,10 +16,10 @@ import numpy as np
 from csc_utils.io import write_to_file_atomically
 from divisi2.fileIO import load_pickle, save_pickle
 from divisi2.ordered_set import PrioritySet
-from luminoso2.svdupdate import general_svd_update
 from luminoso2.term_database import TermDatabase, _BIG
 from luminoso2.text_readers import get_reader, DOCUMENT, TAG
 from luminoso2.document_handlers import handle_url
+from luminoso2.assoc_space import AssocSpace
 import os
 import sys
 from config import Config
@@ -36,6 +36,7 @@ class StudyExists(Exception):
     pass
 
 CONNECTION_COMPRESSION_LEVEL = 2
+LUMINOSO_ENVIRONMENT_DIR = '~/.luminoso'
 
 class LuminosoModel(object):
     """
@@ -54,13 +55,13 @@ class LuminosoModel(object):
     CONNECTIONS_DIR = 'connections_cache'
     _update_k = 100
 
-    def __init__(self, model_dir, model_data=None):
+    def __init__(self, model_dir, assoc_space=None):
         """
         A LuminosoModel is constructed from `dir`, a path to a directory.
         This directory will contain saved versions of various matrices, as
         well as a SQLite database of terms and documents.
 
-        model_data, if passed, is a tuple (U, Sigma) of model data. Otherwise it's loaded from a pickle.
+        assoc_space, if passed, is an AssocSpace; otherwise it's loaded from a pickle.
         """
         if not isinstance(model_dir, unicode):
             # Ensure that paths are unicode.
@@ -71,10 +72,10 @@ class LuminosoModel(object):
                           % model_dir)
         self.dir = model_dir
         self._load_config()
-        if model_data:
-            self._set_data(model_data)
+        if assoc_space:
+            self._set_assoc_space(assoc_space)
         else:
-            self._load_data()
+            self._load_assoc_space()
         self.database = TermDatabase(
           self.filename_in_dir(LuminosoModel.DB_FILENAME)
         )
@@ -124,31 +125,30 @@ class LuminosoModel(object):
         json.dump(stats.as_dict(), out, indent=2, ensure_ascii=False)
         out.close()
 
-    def _load_data(self):
-        "Load the model data from a file."
-        data = load_pickle(
+    def _load_assoc_space(self):
+        "Load the AssocSpace from a file."
+        assoc_space = load_pickle(
             self.filename_in_dir(LuminosoModel.DATA_FILENAME)
             )
-        self._set_data(data)
+        self._set_assoc_space(assoc_space)
 
-    def _set_data(self, model_data):
-        self.u, self.sigma = model_data
-        self.assoc = self.spectrally_associate(self.u).normalize_rows(offset=0.001)
+    def _set_assoc_space(self, assoc_space):
+        self.assoc_space = assoc_space
         self.save_data()
-        self.priority = self.u.row_labels
+        self.priority = self.assoc_space.labels
         assert isinstance(self.priority, PrioritySet)
         self.priority.listen_for_drops(self.on_drop)
 
     def save_data(self):
         "Save the model data to a file."
-        save_pickle((self.u, self.sigma),
+        save_pickle(self.assoc_space,
                     self.filename_in_dir(LuminosoModel.DATA_FILENAME))
     
     def on_drop(self, index, key):
         """
         Handle when a key falls out of the PrioritySet.
         """
-        self.u[index, :] = 0
+        self.assoc_space.on_drop(index, key)
 
     def add_document(self, doc, reader_name=None):
         """
@@ -350,7 +350,7 @@ class LuminosoModel(object):
     add_from_url = add_from
 
     def _update_matrix(self, batch_texts):
-        nterms, k = self.u.shape
+        nterms, k = self.assoc_space.u.shape
         values, rows, cols = [], [], []
         for text in batch_texts:
             for weight, term1, term2 in self.text_assoc_updates(text):
@@ -399,21 +399,10 @@ class LuminosoModel(object):
 
             # Compute the SVD of this set of updates.
             LOG.info('Analyzing new associations...')
-            update_u, update_s, update_v = update_matrix.svd(k=self._update_k)
+            update_space = AssocSpace.from_matrix(update_matrix, self._update_k)
 
-            # Strip to bare NumPy
-            U = np.asarray(self.u)
-            A = np.multiply(np.asarray(update_u), np.asarray(update_s))
-            B = np.asarray(update_v)
-
-            # Apply SVD update.
             LOG.info('Updating projection with new associations...')
-            new_u, new_sigma, _ = general_svd_update(U, self.sigma, U, A, B, U.shape[1])
-
-            # Update the stored model.
-            self.u = divisi2.DenseMatrix(new_u, self.priority, None)
-            self.sigma = new_sigma
-            self.assoc = self.spectrally_associate(self.u).normalize_rows(offset=0.001)
+            self.assoc_space = self.assoc_space.merged_with(update_space)
 
         # Finally, update the full texts of the terms we saw.
         LOG.info("Updating full texts")
@@ -501,42 +490,30 @@ class LuminosoModel(object):
                 return concept_text
                 #return self.database.get_term_text(concept_text)
         
-        mat = self.assoc.concatenate(self.get_doc_matrix(study_name))
+        mat = self.assoc_space.assoc.concatenate(self.get_doc_matrix(study_name))
         write_packed(mat, self.filename_in_dir(study_name), denormalize)
-
-    def spectrally_associate(self, vec):
-        """
-        Multiply vec by e^(sqrt(S)/2).
-        """
-        return vec.multiply(np.exp(np.sqrt(self.sigma)/2))
 
     def vector_from_tag(self, tag, value, input_only=False):
         vecs = [self.vector_from_document(doc, input_only=input_only)
                 for doc in self.database.documents_with_tag_value(tag, value)]
         return sum(vecs)
 
+    def apply_tfidf_weights(self, terms_with_weights):
+        '''
+        Apply tf-idf weighting to the given terms and weights.
+        '''
+        return [(term, weight * self.get_term_idf(term))
+                for term, weight in terms_with_weights
+                if isinstance(term, basestring) and term in self.priority]
+
     def vector_from_terms(self, terms, input_only=False):
         """
         Get a category vector representing the given set of weighted terms,
         expressed as (term, weight) tuples. This will apply TF-IDF weighting.
         """
-        total_weight = 0.000001
-        vec = divisi2.DenseVector(
-            np.zeros((len(self.priority),)),
-            labels=self.priority
-        )
-        for _, weight in terms:
-            total_weight += abs(weight)
-
-        for term, weight in terms:
-            if isinstance(term, basestring) and term in self.priority:
-                index = self.priority.index(term)
-                tfidf_weight = weight * self.get_term_idf(term)
-                assoc_weight = np.linalg.norm(self.u.row_named(term))
-                vec[index] = tfidf_weight / total_weight
-        if input_only:
-            return vec
-        return divisi2.dot(vec, self.assoc).normalize()
+        return self.assoc_space.vector_from_terms(
+            self.apply_tfidf_weights(terms),
+            input_only=input_only)
 
     def vector_from_text(self, text, reader_name=None, input_only=False):
         """
@@ -572,11 +549,10 @@ class LuminosoModel(object):
         associated terms. You can run the `top_items()` method of this vector
         to get the most associated terms.
         """
-        return divisi2.dot(self.assoc, vec)
+        return self.assoc_space.terms_similar_to_vector(vec)
 
     def term_association(self, term1, term2):
-        return divisi2.dot(self.assoc.row_named(term1),
-                           self.assoc.row_named(term2))
+        return self.assoc_space.assoc_between_two_terms(term1, term2)
     
     def domain_terms_similar_to_vector(self, vec):
         """
@@ -638,39 +614,31 @@ class LuminosoModel(object):
         """
         study_matrix = self.get_doc_matrix(study)
         canonical_matrix = self.get_doc_matrix(canonicals)
-        return CanonicalStats(self.assoc, study_matrix, canonical_matrix)
+        return CanonicalStats(self.assoc_space.assoc, study_matrix, canonical_matrix)
 
     def __repr__(self):
         return "<LuminosoModel: %r>" % self.dir
 
     @staticmethod
-    def make(model_dir, model_data, config):
+    def make(model_dir, assoc_space, config):
         """
         Make a new LuminosoModel in the (nonexistent) directory `dir`,
-        with initial data `model_data`.
+        with initial AssocSpace `assoc_space`.
         """
-        # Adjust the size of the matrix to match the config, if necessary.
         if os.access(model_dir, os.F_OK):
             raise StudyExists("The model directory %r already exists." % model_dir)
-        rows = config['num_concepts']
-        cols = config['num_axes']
-        U, Sigma = model_data
-        if U.shape != (rows, cols):
-            dmat = divisi2.DenseMatrix((rows, cols))
-            rows_to_copy = U.shape[0]
-            if rows < rows_to_copy:
-                raise ValueError("num_concepts is too small to fit the "
-                                 "existing concepts.")
-            cols_to_copy = min(cols, U.shape[1])
-            dmat[:rows_to_copy, :cols_to_copy] = \
-              U[:rows_to_copy, :cols_to_copy]
-            dmat.row_labels = U.row_labels
-            Sigma = Sigma[:cols_to_copy]
-        else:
-            dmat = U
-        
+
+        # Adjust the size of the matrix to match the config, if necessary.
+        if assoc_space.n_rows > config.num_concepts:
+            raise ValueError("num_concepts is too small to fit the "
+                             "existing concepts.")
+        assert assoc_space.k == config.num_axes
+        # HACK!: Force the assoc_space to be symmetric.
+        assoc_space.v = assoc_space.u
+        assoc_space = assoc_space.expanded_to(config.num_concepts, config.num_concepts)
+
         # Make sure that the matrix has a PrioritySet for its row labels.
-        _prioritize_labels(dmat, rows)    
+        assoc_space.set_labels(_ensure_priorityset(assoc_space.labels, config.num_concepts))
 
         # Make the model directory and populate its initial files.
         os.mkdir(model_dir)
@@ -678,7 +646,7 @@ class LuminosoModel(object):
         save_config_file(config, config_file)
 
         # Now load the model from that directory and return it.
-        model = LuminosoModel(model_dir, model_data=(dmat, Sigma))
+        model = LuminosoModel(model_dir, assoc_space)
         return model
 
     @staticmethod
@@ -689,9 +657,10 @@ class LuminosoModel(object):
         if config is None:
             config = Config()
             _set_defaults(config)
-        mat = divisi2.DenseMatrix((config['num_concepts'], config['num_axes']))
-        diag_S = np.zeros(config['num_axes'])
-        model = LuminosoModel.make(model_dir, (mat, diag_S), config)
+        else:
+            config = convert_config(config)
+        assoc_space = AssocSpace.make_empty(config.num_concepts, config.num_axes)
+        model = LuminosoModel.make(model_dir, assoc_space, config)
         return model
 
     @staticmethod
@@ -722,66 +691,37 @@ class LuminosoModel(object):
             config['reader'] = 'simplenlp.'+lang
         if os.access(model_dir, os.F_OK):
             raise StudyExists("The model directory %r already exists." % model_dir)
-        LOG.info("Making common sense matrix")
-        assoc = divisi2.network.conceptnet_assoc(lang)
-        (mat_U, diag_S, _) = assoc.normalize_all().svd(k=100)
-        
-        model = LuminosoModel.make(model_dir, (mat_U, diag_S), config)
-        model.config['iteration'] = 1000
-        return model
+        assoc_space = get_commonsense_assoc(lang, k=100)
+        return LuminosoModel.make(model_dir, assoc_space, config)
 
     def recompute(self, background_data, newconfig=None, partial=False):
         """
         Re-learn a model with new parameters or new background knowledge,
         given its existing term database.
 
-        TODO: un-duplicate code between this and .make
+        background_data is an AssocSpace.
         """
         config = self.config
         if newconfig is not None:
             for key, value in newconfig.items():
                 config[key] = value
 
-        rows = config['num_concepts']
-        cols = config['num_axes']
         blend_factor = config.get('blend_factor', 0.5)
-        assoc_power = config.get('assoc_power', 1.0)
 
         if background_data is None:
-            newU = divisi2.DenseMatrix((rows, cols))
-            newSigma = np.zeros((cols,))
-            newU.row_labels = PrioritySet(rows)
-        else:
-            U, Sigma, _ = background_data.svd(k=cols)
+            background_data = AssocSpace.make_empty(config.num_concepts, config.num_axes)
 
-            newU = divisi2.DenseMatrix((rows, cols))
-            rows_to_copy = U.shape[0]
-            if rows < rows_to_copy:
-                raise ValueError("num_concepts is too small to fit the "
-                                 "existing concepts.")
-            cols_to_copy = min(cols, U.shape[1])
-            newU[:rows_to_copy, :cols_to_copy] = \
-              U[:rows_to_copy, :cols_to_copy]
-            newU.row_labels = U.row_labels
-            newSigma = Sigma[:cols_to_copy]
-            
-        # Make sure that the matrix has a PrioritySet for its row labels.
-        _prioritize_labels(newU, rows)
+        # Adjust the size of the matrix to match the config, if necessary.
+        if background_data.n_rows > config.num_concepts:
+            raise ValueError("num_concepts is too small to fit the "
+                             "existing concepts.")
+        # HACK!: Force the assoc_space to be symmetric.
+        background_data.v = background_data.u
+        background_data = background_data.expanded_to(config.num_concepts, config.num_concepts)
 
-        from luminoso2.term_database import Term
-        from sqlalchemy.sql.expression import desc
-        query = self.database.sql_session.query(Term)\
-                   .filter(Term.term != '*')
-        if self.config.ignore_bigrams:
-            query = query.filter(~Term.term.like('% %'))
-        query = query.order_by(desc(Term.relevance))
-
-        for termobj in query:
-            newU.row_labels.add(termobj.term, termobj.relevance)
-            if len(newU.row_labels.items) == rows:
-                break
-        
-        self.priority = newU.row_labels
+        labels = self.construct_lexicon(background_data.labels)
+        background_data.set_labels(labels)
+        self.priority = labels
 
         if partial:
             # set partial=True when you already have the unblended.svd file
@@ -794,31 +734,36 @@ class LuminosoModel(object):
             combined_update = reduce_update_svds(updates)
             LOG.info('saving reduced matrix')
             divisi2.save(combined_update, self.filename_in_dir('unblended.svd'))
-        
-        LOG.info('computing blend')
-        # rescale to perform rough blending
-        combinedU, combinedS, combinedV = combined_update
-        combinedS = combinedS / combinedS[0] * (1.0-blend_factor) * assoc_power
-        newSigma = newSigma / newSigma[0] * blend_factor * assoc_power
-        
+
         if background_data is None:
-            blendedU, blendedS = combinedU, combinedS
+            assoc_space = combined_update
         else:
-            final_updates = [(combinedU, combinedS, combinedU), (newU, newSigma, newU)]
-            LOG.info('reducing blend')
-            blendedU, blendedS, blendedV = reduce_update_svds(final_updates)
-        
-        self.u = divisi2.DenseMatrix(
-            blendedU[:, :cols],
-            row_labels=self.priority
-        )
-        self.sigma = blendedS[:cols]
-        self.assoc = self.spectrally_associate(self.u).normalize_rows(offset=0.001)
+            LOG.info('computing blend')
+            assoc_space = background_data.merged_with(combined_update, ((1-blend_factor), blend_factor))
+
+        self.assoc_space = assoc_space
 
         LOG.info('saving final results')
-        # set my U and S accordingly
         self.save_config()
         self.save_data()
+
+    def construct_lexicon(self, background_terms):
+        num_concepts = self.config.num_concepts
+        lexicon = _ensure_priorityset(background_terms, num_concepts)
+
+        from luminoso2.term_database import Term
+        from sqlalchemy.sql.expression import desc
+        query = self.database.sql_session.query(Term)\
+                   .filter(Term.term != '*')
+        if self.config.ignore_bigrams:
+            query = query.filter(~Term.term.like('% %'))
+        query = query.order_by(desc(Term.relevance))
+
+        for termobj in query:
+            lexicon.add(termobj.term, termobj.relevance)
+            if len(lexicon.items) == num_concepts:
+                break
+        return lexicon
 
 class CanonicalStats(object):
     def __init__(self, assoc, study_matrix, canonical_matrix):
@@ -890,19 +835,20 @@ def _set_defaults(config):
         if k not in config:
             config[k] = v
 
+def _ensure_priorityset(labels, num_concepts):
+    if isinstance(labels, PrioritySet):
+        return labels
+    priority = PrioritySet(num_concepts)
+    if labels is not None:
+        item_tuples = zip(labels, [_BIG] * len(labels))
+        priority.load_items(item_tuples)
+    return priority
+
 def _prioritize_labels(mat, num_concepts):
     """
     Ensure that a dense matrix has a PrioritySet for its row labels.
     """
-    if not isinstance(mat.row_labels, PrioritySet):
-        # turn an ordinary matrix into one that has a
-        # PrioritySet for row indices
-        priority = PrioritySet(num_concepts)
-        if mat.row_labels is not None:
-            items = mat.row_labels
-            item_tuples = zip(items, [_BIG] * len(items))
-            priority.load_items(item_tuples)
-        mat.row_labels = priority
+    mat.row_labels = _ensure_priorityset(mat.row_labels, num_concepts)
     return mat
 
 def _mean_var_stats(samples, baseline=1):
@@ -915,6 +861,8 @@ def convert_config(config_dict):
     """
     Convert a dictionary to a Config object.
     """
+    if isinstance(config_dict, Config):
+        return config_dict
     config = Config()
     for key, value in config_dict.items():
         config[key] = value
@@ -926,11 +874,43 @@ def save_config_file(config, filename):
     LuminosoModel instance exists, so it can be loaded with a valid
     config.)
     """
-    if not isinstance(config, Config):
-        config = convert_config(config)
+    config = convert_config(config)
     out = open(filename, 'w')
     config.save(out)
     out.close()
+
+def get_commonsense_assoc(lang, k):
+    """
+    Load or create the AssocSpace for ConceptNet in the given
+    language. Truncate it to dimensionality k.
+    """
+    assert isinstance(lang, basestring) and '/' not in lang
+    cache_dir = os.path.join(os.path.expanduser(LUMINOSO_ENVIRONMENT_DIR), 'assoc_spaces')
+    cache_file = os.path.join(cache_dir, lang)
+    if os.path.exists(cache_file):
+        try:
+            assoc_space = load_pickle(cache_file)
+        except Exception:
+            os.remove(cache_file)
+        else:
+            if assoc_space.k > k:
+                return assoc_space.truncated_to(k)
+            elif assoc_space.k == k:
+                return assoc_space
+
+    # If we get here, space didn't exist or was too small.
+    LOG.info("Making common sense space for lang=%s", lang)
+    assoc = divisi2.network.conceptnet_assoc(lang)
+    assoc_space = AssocSpace.from_matrix(assoc.normalize_all(), k=k)
+
+    # For now, be conservative: only save the cache if the cache
+    # directory already exists.
+    if os.path.exists(cache_dir):
+        LOG.info("Saving cached common sense space.")
+        save_pickle(assoc_space, cache_file)
+
+    return assoc_space
+
 
 SENTINEL = 'STOP'
 def _matrix_worker(input, output, model, k):
@@ -938,10 +918,10 @@ def _matrix_worker(input, output, model, k):
     for batch in iter(input.get, SENTINEL):
         proc = current_process()
         LOG.info('worker %s (pid=%d) computing update matrix', proc.name, proc.pid)
-        update_mat = model._update_matrix(batch)
+        update_matrix = model._update_matrix(batch)
         LOG.info('worker %s (pid=%d) computing update SVD', proc.name, proc.pid)
-        svd = update_mat.svd(k=k)
-        output.put(svd)
+        update_space = AssocSpace.from_matrix(update_matrix, k)
+        output.put(update_space)
 
 k = 200 # FIXME
 num_workers = 1
@@ -988,21 +968,8 @@ def reduce_update_svds(update_svds):
                 # Last one.
                 todo.append(pair[0])
                 continue
-
-            # Blend the pair of SVDs.
-            (u_a, s_a, v_a), (u_b, s_b, v_b) = pair
-            
-            # Strip to bare NumPy
-            U = np.asarray(u_a)
-            S = s_a
-            A = np.multiply(np.asarray(u_b), np.asarray(s_b))
-            B = np.asarray(v_b)
-
-            # Compute updated SVD.
-            new_u, new_sigma, _ = general_svd_update(U, S, U, A, B, k)
-
-            todo.append((new_u, new_sigma, new_u))
-
+            a, b = pair
+            todo.append(a.merged_with(b))
     return todo[0]
     
 def run_in_directory(dir, lang='en'):
