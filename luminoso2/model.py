@@ -615,7 +615,7 @@ class LuminosoModel(object):
         """
         study_matrix = self.get_doc_matrix(study)
         canonical_matrix = self.get_doc_matrix(canonicals)
-        return CanonicalStats(self.assoc, study_matrix, canonical_matrix)
+        return CanonicalStats(self.assoc_space.assoc, study_matrix, canonical_matrix)
 
     def __repr__(self):
         return "<LuminosoModel: %r>" % self.dir
