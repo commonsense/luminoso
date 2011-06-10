@@ -863,19 +863,20 @@ def _set_defaults(config):
         if k not in config:
             config[k] = v
 
+def _ensure_priorityset(labels, num_concepts):
+    if isinstance(labels, PrioritySet):
+        return labels
+    priority = PrioritySet(num_concepts)
+    if labels is not None:
+        item_tuples = zip(labels, [_BIG] * len(labels))
+        priority.load_items(item_tuples)
+    return priority
+
 def _prioritize_labels(mat, num_concepts):
     """
     Ensure that a dense matrix has a PrioritySet for its row labels.
     """
-    if not isinstance(mat.row_labels, PrioritySet):
-        # turn an ordinary matrix into one that has a
-        # PrioritySet for row indices
-        priority = PrioritySet(num_concepts)
-        if mat.row_labels is not None:
-            items = mat.row_labels
-            item_tuples = zip(items, [_BIG] * len(items))
-            priority.load_items(item_tuples)
-        mat.row_labels = priority
+    mat.row_labels = _ensure_priorityset(mat.row_labels, num_concepts)
     return mat
 
 def _mean_var_stats(samples, baseline=1):
