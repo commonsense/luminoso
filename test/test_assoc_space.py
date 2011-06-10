@@ -35,3 +35,4 @@ def test_expanded_to():
     eq_(expanded.u[0, 0], 1.0)
     eq_(expanded.u[0, 1], 0.0)
     eq_(expanded.v[0, 0], 1.0)
+    assert np.all(assoc.sigma == expanded.sigma)
