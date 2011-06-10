@@ -3,9 +3,11 @@ import numpy as np
 from divisi2 import DenseMatrix, DenseVector
 from nose.tools import eq_
 
-def test_dimensionality():
-    k = 5
-    u = DenseMatrix(np.zeros((100, k)))
-    sigma = DenseVector(np.zeros(k))
-    m = AssocSpace(u, sigma)
-    eq_(m.k, k)
+def test_make_empty():
+    concepts, axes = 100, 5
+    m = AssocSpace.make_empty(concepts, axes)
+    eq_(m.k, axes)
+    assert np.all(m.u == 0)
+    assert np.all(m.sigma == 0)
+    assert np.all(m.v == 0)
+

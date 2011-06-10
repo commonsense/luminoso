@@ -44,6 +44,12 @@ class AssocSpace(object):
         u, s, v = mat.svd(k=k)
         return cls(u, s, v)
 
+    @classmethod
+    def make_empty(cls, rows, k):
+        u = divisi2.DenseMatrix((rows, k))
+        sigma = np.zeros(k)
+        return cls(u, sigma)
+
     def truncated_to(self, k):
         '''
         Returns a copy of the space truncated to k dimensions.
