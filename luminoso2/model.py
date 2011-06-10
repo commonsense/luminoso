@@ -666,9 +666,10 @@ class LuminosoModel(object):
         if config is None:
             config = Config()
             _set_defaults(config)
-        mat = divisi2.DenseMatrix((config['num_concepts'], config['num_axes']))
-        diag_S = np.zeros(config['num_axes'])
-        model = LuminosoModel.make(model_dir, AssocSpace(mat, diag_S), config)
+        else:
+            config = convert_config(config)
+        assoc_space = AssocSpace.make_empty(config.num_concepts, config.num_axes)
+        model = LuminosoModel.make(model_dir, assoc_space, config)
         return model
 
     @staticmethod
