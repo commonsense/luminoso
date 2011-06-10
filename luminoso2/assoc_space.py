@@ -2,6 +2,10 @@ import divisi2
 import numpy as np
 from luminoso2.svdupdate import general_svd_update
 
+# TODO: many parts of this code assume that the space is
+# symmetric. And so far, it is (or should be). But I'd like to expand
+# to support non-symmetric spaces. -kcarnold
+
 class AssocSpace(object):
     '''
     An AssocSpace projects terms into a vector space shaped by their
@@ -82,6 +86,11 @@ class AssocSpace(object):
         newV.row_labels = self.v.row_labels
 
         return self.__class__(newU, self.sigma, newV)
+
+    def set_labels(self, labels):
+        self.labels = labels
+        self.u.row_labels = labels
+        self.v.row_labels = labels
 
     def on_drop(self, index, key):
         """

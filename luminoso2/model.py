@@ -628,26 +628,18 @@ class LuminosoModel(object):
         """
         if os.access(model_dir, os.F_OK):
             raise StudyExists("The model directory %r already exists." % model_dir)
+
         # Adjust the size of the matrix to match the config, if necessary.
-        rows = config['num_concepts']
-        cols = config['num_axes']
-        U, Sigma = assoc_space.u, assoc_space.sigma
-        if U.shape != (rows, cols):
-            dmat = divisi2.DenseMatrix((rows, cols))
-            rows_to_copy = U.shape[0]
-            if rows < rows_to_copy:
-                raise ValueError("num_concepts is too small to fit the "
-                                 "existing concepts.")
-            cols_to_copy = min(cols, U.shape[1])
-            dmat[:rows_to_copy, :cols_to_copy] = \
-              U[:rows_to_copy, :cols_to_copy]
-            dmat.row_labels = U.row_labels
-            Sigma = Sigma[:cols_to_copy]
-        else:
-            dmat = U
-        
+        if assoc_space.n_rows > config.num_concepts:
+            raise ValueError("num_concepts is too small to fit the "
+                             "existing concepts.")
+        assert assoc_space.k == config.num_axes
+        # HACK!: Force the assoc_space to be symmetric.
+        assoc_space.v = assoc_space.u
+        assoc_space = assoc_space.expanded_to(config.num_concepts, config.num_concepts)
+
         # Make sure that the matrix has a PrioritySet for its row labels.
-        _prioritize_labels(dmat, rows)    
+        assoc_space.set_labels(_ensure_priorityset(assoc_space.labels, config.num_concepts))
 
         # Make the model directory and populate its initial files.
         os.mkdir(model_dir)
@@ -655,7 +647,7 @@ class LuminosoModel(object):
         save_config_file(config, config_file)
 
         # Now load the model from that directory and return it.
-        model = LuminosoModel(model_dir, AssocSpace(dmat, Sigma))
+        model = LuminosoModel(model_dir, assoc_space)
         return model
 
     @staticmethod
