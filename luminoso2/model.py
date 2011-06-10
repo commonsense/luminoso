@@ -889,6 +889,8 @@ def convert_config(config_dict):
     """
     Convert a dictionary to a Config object.
     """
+    if isinstance(config_dict, Config):
+        return config_dict
     config = Config()
     for key, value in config_dict.items():
         config[key] = value
@@ -900,8 +902,7 @@ def save_config_file(config, filename):
     LuminosoModel instance exists, so it can be loaded with a valid
     config.)
     """
-    if not isinstance(config, Config):
-        config = convert_config(config)
+    config = convert_config(config)
     out = open(filename, 'w')
     config.save(out)
     out.close()
