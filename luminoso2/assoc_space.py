@@ -35,6 +35,11 @@ class AssocSpace(object):
     def k(self):
         return len(self.sigma)
 
+    @property
+    def n_rows(self): return self.u.shape[0]
+    @property
+    def n_cols(self): return self.v.shape[0]
+
     @classmethod
     def from_matrix(cls, mat, k):
         '''
