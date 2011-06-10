@@ -399,10 +399,10 @@ class LuminosoModel(object):
 
             # Compute the SVD of this set of updates.
             LOG.info('Analyzing new associations...')
-            update_model = AssocSpace.from_matrix(update_matrix, self._update_k)
+            update_space = AssocSpace.from_matrix(update_matrix, self._update_k)
 
             LOG.info('Updating projection with new associations...')
-            self.assoc_space = self.assoc_space.merged_with(update_model)
+            self.assoc_space = self.assoc_space.merged_with(update_space)
 
         # Finally, update the full texts of the terms we saw.
         LOG.info("Updating full texts")
