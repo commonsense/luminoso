@@ -26,6 +26,8 @@ class AssocSpace(object):
         self.u = u
         self.sigma = sigma
         self.v = v
+        self.n_rows = self.u.shape[0]
+        self.n_cols = self.v.shape[0]
         self.labels = u.row_labels
         self.assoc = self.spectrally_associate(self.u).normalize_rows(offset=0.001)
 
@@ -43,11 +45,6 @@ class AssocSpace(object):
     @property
     def k(self):
         return len(self.sigma)
-
-    @property
-    def n_rows(self): return self.u.shape[0]
-    @property
-    def n_cols(self): return self.v.shape[0]
 
     @classmethod
     def from_matrix(cls, mat, k):
