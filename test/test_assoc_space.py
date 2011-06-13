@@ -1,4 +1,5 @@
 from luminoso2.assoc_space import AssocSpace
+from csc_utils.ordered_set import OrderedSet
 import numpy as np
 from divisi2 import DenseMatrix, DenseVector
 from nose.tools import eq_
@@ -36,3 +37,12 @@ def test_expanded_to():
     eq_(expanded.u[0, 1], 0.0)
     eq_(expanded.v[0, 0], 1.0)
     assert np.all(assoc.sigma == expanded.sigma)
+    assert expanded.labels is None
+
+def test_expanded_to_labels():
+    concepts, axes = 100, 5
+    aspace = AssocSpace.make_empty(concepts, axes)
+    labels = OrderedSet(['a', 'b', 'c'])
+    expanded = aspace.expanded_to(200, 200, labels=labels)
+    eq_(expanded.labels, labels)
+    eq_(expanded.u.row_labels, labels)

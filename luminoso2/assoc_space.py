@@ -67,32 +67,34 @@ class AssocSpace(object):
         '''
         return self.__class__(self.u[:,:k], self.sigma[:k], self.v[:,:k])
 
-    def expanded_to(self, rows, cols):
+    def expanded_to(self, rows, cols, labels=None):
         '''
         Returns a copy of the space expanded to (rows, cols). Does not
         change the dimensionality of the space. New rows and columns
         project to zero. An error is raised if the existing data does
         not fit.
+
+        If `labels` is passed, it is used as the row and column
+        labels.
         '''
         if rows < self.n_rows:
             raise ValueError("Number of rows is insufficient to fit existing data.")
         if cols < self.n_cols:
             raise ValueError("Number of columns is insufficient to fit existing data.")
         k = self.k
+
+        if labels is None:
+            labels = self.labels
+
         newU = divisi2.DenseMatrix((rows, k))
         newU[:self.n_rows, :] = self.u
-        newU.row_labels = self.u.row_labels
+        newU.row_labels = labels
 
         newV = divisi2.DenseMatrix((cols, k))
         newV[:self.n_cols, :] = self.v
-        newV.row_labels = self.v.row_labels
+        newV.row_labels = labels
 
         return self.__class__(newU, self.sigma, newV)
-
-    def set_labels(self, labels):
-        self.labels = labels
-        self.u.row_labels = labels
-        self.v.row_labels = labels
 
     def on_drop(self, index, key):
         """

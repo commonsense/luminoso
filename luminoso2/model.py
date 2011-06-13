@@ -633,12 +633,12 @@ class LuminosoModel(object):
             raise ValueError("num_concepts is too small to fit the "
                              "existing concepts.")
         assert assoc_space.k == config.num_axes
+
         # HACK!: Force the assoc_space to be symmetric.
         assoc_space.v = assoc_space.u
-        assoc_space = assoc_space.expanded_to(config.num_concepts, config.num_concepts)
 
-        # Make sure that the matrix has a PrioritySet for its row labels.
-        assoc_space.set_labels(_ensure_priorityset(assoc_space.labels, config.num_concepts))
+        labels = _ensure_priorityset(assoc_space.labels, config.num_concepts)
+        assoc_space = assoc_space.expanded_to(config.num_concepts, config.num_concepts, labels=labels)
 
         # Make the model directory and populate its initial files.
         os.mkdir(model_dir)
@@ -717,10 +717,10 @@ class LuminosoModel(object):
                              "existing concepts.")
         # HACK!: Force the assoc_space to be symmetric.
         background_data.v = background_data.u
-        background_data = background_data.expanded_to(config.num_concepts, config.num_concepts)
 
         labels = self.construct_lexicon(background_data.labels)
-        background_data.set_labels(labels)
+        background_data = background_data.expanded_to(config.num_concepts, config.num_concepts, labels=labels)
+
         self.priority = labels
 
         if partial:
