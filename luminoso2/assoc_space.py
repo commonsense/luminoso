@@ -11,6 +11,11 @@ class AssocSpace(object):
     An AssocSpace projects terms into a vector space shaped by their
     associations. It can also update that vector space to account for
     new term association evidence.
+
+    AssocSpaces are intended to be treated as immutable. All mutation
+    operations return a new AssocSpace instead. However, the new
+    AssocSpace may share data, either as the same objects or as NumPy
+    views, with the original AssocSpace.
     '''
     def __init__(self, u, sigma, v=None):
         '''
@@ -96,6 +101,10 @@ class AssocSpace(object):
         """
         Handle when a key falls out of the PrioritySet.
         """
+        # FIXME: this method is inconsistent with the idea that
+        # AssocSpaces are immutable. However, it is also inconsistent
+        # with the way that Luminoso models are now computed. So this
+        # method should simply be removed.
         self.u[index, :] = 0
         # TODO: re-orthonormalize.
 
