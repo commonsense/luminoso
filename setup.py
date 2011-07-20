@@ -50,7 +50,7 @@ setup(
     app=['luminoso/run_luminoso.py'],
     scripts=['luminoso/run_luminoso.py', 'luminoso/study.py'],
     windows=[{'script': 'luminoso/run_luminoso.py'}],
-    install_requires=['csc-utils >= 0.5', 'divisi2', 'ipython >= 0.9.1', 'jinja2', 'chardet'],
+    install_requires=['csc-utils >= 0.5', 'divisi2', 'simplenlp', 'ipython >= 0.9.1', 'jinja2', 'chardet'],
     package_data={'csc.nl': ['mblem/*.pickle', 'en/*.txt']},
     include_package_data=True,
     #data_files=DATA_FILES,

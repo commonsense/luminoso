@@ -1,0 +1,18 @@
+What is the input to eigenvector_iteration?
+
+- A mapping from _id to total. Simple enough.
+- But, where does the initial mapping come from?
+- Two simple possibilities:
+    - Start with the total (minus other eigenvector components)
+    - Start with a semi-arbitrary single entry (should be efficient!)
+- This can be specified from Python
+
+How can eigenvector_iteration take previous eigenvectors into account?
+    - What we need is a "normalize" function that includes orthogonality.
+    - For each eigenvector:
+        - Accumulate a dot product of the result with the eigenvector
+        - Subtract the eigenvector times that dot product
+        - Accumulate a dot product of the result with itself
+        - If 0, bail out
+        - Divide by the square root of that product
+

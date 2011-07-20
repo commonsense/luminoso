@@ -6,8 +6,6 @@ Simple things to fix
 - If you choose an axis, rotate slightly so that the axis remains selected, and
   choose the same axis again, nothing happens. (It should put the axis back
   where it was before the rotation.)
-- Support encoding detection with the 'chardet' module throughout, not just in
-  Study.analyze().
 
 Harder things to fix
 --------------------
@@ -24,4 +22,19 @@ Long-term features
 - Ability to use CCIPCA, include streaming data in a study
 - Toggle between projecting the SVD like we do now, and MDSing it
 - Clusters (giving them descriptions)
+
+Big huge text processing redesign (Feb 2011)
+--------------------------------------------
+- Use NLTK (embedded in the module?) to extract unigrams/bigrams with TF-IDF
+- Filter to informative features, to get documents x (concepts + other
+  features)
+- Blend with spectral assoc of ConceptNet
+- Special types of input:
+    - Canonicals: meaningful values in the space of possible documents
+    - Labels: key=value or key=??? pairs, representing information we may or
+      may not know about the document
+- Labels and canonicals are categories projected into the space, not used to
+  form the space
+- Use SVC to determine unknown labels
+- Use K-means to discover new categories
 

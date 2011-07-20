@@ -3,3 +3,4 @@ ipython
 chardet
 jinja2
 #simplejson, if <py2.6
+simplenlp

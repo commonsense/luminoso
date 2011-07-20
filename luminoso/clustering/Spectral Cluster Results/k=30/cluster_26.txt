@@ -1,0 +1,10 @@
+door
+mit student
+fail
+street
+room
+hall
+live
+sit
+dine
+student

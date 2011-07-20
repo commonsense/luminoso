@@ -57,11 +57,15 @@ class Document(object):
 
     @classmethod
     def from_file(cls, filename, name):
-        # Open in text mode.
-        rawtext = open(filename, 'r')
-        encoding = chardet.detect(rawtext.read())['encoding']
-        rawtext.close()
-        text = codecs.open(filename, encoding=encoding, errors='replace').read()
+        rawtext = open(filename, 'rb').read()
+        encoding = chardet.detect(rawtext)['encoding']
+        try:
+            text = rawtext.decode(encoding, 'replace')
+        except LookupError:
+            # This can happen in the case of encodings that Python doesn't implement, like EUC-TW.
+            # FIXME: There should be a better way of indicating this problem
+            name = 'CHARACTER ENCODING PROBLEM [%s]' % name
+            text = ''
         return cls(name, text)
 
     def extract_concepts_with_negation(self):
@@ -140,6 +144,12 @@ class Study(QtCore.QObject):
     A Study is a collection of documents and other matrices that can be analyzed.
     '''
     def __init__(self, name, documents, canonical, other_matrices, settings):
+        """
+        documents: list of Document objects
+        canonical: list of Document objects that are the canonical documents (possibly empty)
+        other_matrices: things to blend.
+        settings: a dict of settings. See DEFAULT_SETTINGS above.
+        """
         QtCore.QObject.__init__(self)
         self.name = name
         self.study_documents = documents
@@ -328,6 +338,7 @@ class Study(QtCore.QObject):
         if self.is_associative():
             doc_rows = divisi2.aligned_matrix_multiply(document_matrix, reduced_U)
             projections = reduced_U.extend(doc_rows)
+
         else:
             doc_indices = [V.row_index(doc.name)
                            for doc in self.documents
@@ -371,10 +382,6 @@ class Study(QtCore.QObject):
                            if doc.name in spectral.row_labels]
             valid_concepts = [c for c in spectral.row_labels if not c.endswith('.txt')]
             concept_indices = [spectral.row_index(c) for c in valid_concepts]
-            
-            # Compute the association of all study documents with each other
-            assoc_grid = np.asarray(spectral[doc_indices, doc_indices].to_dense())
-            assert not np.any(np.isnan(assoc_grid))
             
             # Make an ad hoc category of documents, then find how much each
             # document is associated with this average document.
@@ -446,10 +453,10 @@ class Study(QtCore.QObject):
         docs, projections, Sigma = self.get_eigenstuff()
         magnitudes = np.sqrt(np.sum(np.asarray(projections*projections), axis=1))
         if self.is_associative():
-            spectral = divisi2.reconstruct_activation(projections+0.00001, Sigma, post_normalize=True)
+            spectral = divisi2.reconstruct_activation(projections, Sigma, post_normalize=True, offset=0.0001)
         else:
-            spectral = divisi2.reconstruct_similarity(projections+0.00001, Sigma,
-            post_normalize=True)
+            spectral = divisi2.reconstruct_similarity(projections, Sigma,
+            post_normalize=True, offset=0.0001)
         self._step('Calculating stats...')
         stats = self.compute_stats(docs, spectral)
         
